@@ -7,7 +7,9 @@ package com.health.healthdiagnosis.config;
 
 import com.health.healthdiagnosis.interceptor.AuthInterceptor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
@@ -30,5 +32,13 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/auth/**",      // 认证相关接口 (登录/注册)
                         "/api/public/**"     // 其他公开接口 (如果有)
                 );
+    }
+
+    /**
+     * 配置BCrypt密码加密器
+     */
+    @Bean
+    public BCryptPasswordEncoder bCryptPasswordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 }

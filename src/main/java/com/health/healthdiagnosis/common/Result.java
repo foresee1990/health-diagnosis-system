@@ -61,6 +61,10 @@ public class Result<T> {
         return new Result<>(ErrorCode.SUCCESS, "成功", data);
     }
 
+    public static <T> Result<T> success(String message, T data) {
+        return new Result<>(ErrorCode.SUCCESS, message, data);
+    }
+
     /**
      * 成功响应工厂方法 (无数据)
      *

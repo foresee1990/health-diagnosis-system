@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: health-diagnosis-system
+
+  # 数据源配置
+  datasource:
+    url: jdbc:postgresql://localhost:5432/health_diagnosis
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+
+  # Spring AI 配置
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: qwen3:7b
+          temperature: 0.7
+          num-ctx: 4096
+      embedding:
+        options:
+          model: bge-base-zh-v1.5
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 768
+        initialize-schema: true   # 启动时自动创建 vector_store 表
+  # 文件上传限制（必须与上方 spring: 合并，不能另起 spring: 根键）
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.health.healthdiagnosis.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    # SQL 日志仅在 dev 环境开启，见 application-dev.yaml
+
+# 服务器配置
+server:
+  port: 8080
+  tomcat:
+    connection-timeout: 60s   # 为本地 Ollama AI 接口预留足够响应时间
+
+# JWT 配置（secret 至少 32 字符）
+jwt:
+  secret: health-diagnosis-jwt-secret-key-2024-change-in-prod
+  expiration: 86400   # 24 小时（秒）
+
+# 应用自定义配置
+app:
+  report:
+    base-dir: ./reports/   # PDF 文件存储根目录（相对于启动目录）

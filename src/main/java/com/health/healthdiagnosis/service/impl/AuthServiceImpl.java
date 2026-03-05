@@ -7,6 +7,7 @@ import com.health.healthdiagnosis.common.constants.UserMessageConstants;
 import com.health.healthdiagnosis.dto.request.LoginRequest;
 import com.health.healthdiagnosis.dto.request.RegisterRequest;
 import com.health.healthdiagnosis.dto.response.LoginResponse;
+import com.health.healthdiagnosis.dto.response.UserInfoResponse;
 import com.health.healthdiagnosis.entity.User;
 import com.health.healthdiagnosis.exception.BusinessException;
 import com.health.healthdiagnosis.mapper.UserMapper;
@@ -99,5 +100,31 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("用户登录成功：username={}, userId={}", user.getUsername(), user.getId());
         return loginResponse;
+    }
+    /**
+     * 根据用户ID获取用户信息
+     *
+     * @param userId 用户ID
+     * @return 用户信息响应
+     */
+    @Override
+    public UserInfoResponse getUserInfo(Long userId) {
+        // 1. 根据userId查询用户
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            log.warn("获取用户信息失败：用户不存在，userId={}", userId);
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND, UserMessageConstants.USER_NOT_FOUND);
+        }
+
+        // 2. 构造用户信息响应（不返回密码字段）
+        UserInfoResponse userInfoResponse = UserInfoResponse.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .createdAt(user.getCreatedAt()) // 对应数据库createdAt字段，需确保实体类字段名匹配
+                .build();
+
+        log.info("获取用户信息成功：userId={}, username={}", userId, user.getUsername());
+        return userInfoResponse;
     }
 }

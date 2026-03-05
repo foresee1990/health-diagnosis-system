@@ -5,7 +5,9 @@ package com.health.healthdiagnosis.controller;
  * @date 2026/3/5
  */
 import com.health.healthdiagnosis.common.Result;
+import com.health.healthdiagnosis.dto.request.LoginRequest;
 import com.health.healthdiagnosis.dto.request.RegisterRequest;
+import com.health.healthdiagnosis.dto.response.LoginResponse;
 import com.health.healthdiagnosis.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,5 +34,15 @@ public class AuthController {
     @PostMapping("/register")
     public Result<?> register(@Valid @RequestBody RegisterRequest request) {
         return authService.register(request);
+    }
+    /**
+     * 用户登录接口
+     * @param request 登录请求体（带参数校验）
+     * @return 登录结果（包含token）
+     */
+    @PostMapping("/login")
+    public Result<?> login(@Valid @RequestBody LoginRequest request) {
+        LoginResponse loginResponse = authService.login(request);
+        return Result.success("登录成功", loginResponse);
     }
 }

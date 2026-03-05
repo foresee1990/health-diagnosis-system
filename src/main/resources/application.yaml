@@ -53,8 +53,9 @@ server:
 
 # JWT 配置（secret 至少 32 字符）
 jwt:
+  #TODO： 之后放在配置变量里面
   secret: health-diagnosis-jwt-secret-key-2024-change-in-prod
-  expiration: 86400   # 24 小时（秒）
+  expiration: 86400000   # 24 小时（毫秒）
 
 # 应用自定义配置
 app:

@@ -17,7 +17,7 @@
 ## 技术栈
 - 后端：Spring Boot 3.4.3 + springAi 1.0.0-M6 + MyBatis-Plus 3.5.10.1
 - 数据库：PostgreSQL 16 + pgvector 0.8.2
-- AI：Ollama + Qwen3-7B（对话生成）+ bge-base-zh-v1.5（embedding向量化）
+- AI：Ollama + Qwen3-7B（对话生成）+ quentinz/bge-base-zh-v1.5:latest（embedding向量化）
 - PDF生成：iText 8 
 - 前端：Vue 3 + Element Plus
 - 认证：JWT 无状态认证,只用 JWT 进行身份认证。服务器不存储 Token，每次请求通过验证 JWT 签名和过期时间完成身份校验。

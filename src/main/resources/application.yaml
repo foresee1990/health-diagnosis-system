@@ -24,7 +24,7 @@ spring:
           num-ctx: 4096
       embedding:
         options:
-          model: bge-base-zh-v1.5
+          model: quentinz/bge-base-zh-v1.5:latest
     vectorstore:
       pgvector:
         index-type: HNSW

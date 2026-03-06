@@ -35,3 +35,17 @@
 
 ## 目标用户
 普通患者（无医学背景）
+
+## project rule
+Do NOT implement PromptBuilder or manual prompt concatenation.
+
+Use Spring AI RAG pipeline only:
+
+SpringBoot → ChatClient → QuestionAnswerAdvisor → VectorStore(pgvector) → Ollama
+
+Advisor already handles:
+- vector search
+- context injection
+- prompt construction
+
+Avoid reinventing the wheel in all future tasks.

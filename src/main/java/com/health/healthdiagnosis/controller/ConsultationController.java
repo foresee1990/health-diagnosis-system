@@ -12,13 +12,15 @@ import com.health.healthdiagnosis.service.ConsultationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
 @RestController
 @RequestMapping("/api/consultations")
 @RequiredArgsConstructor
 public class ConsultationController {
-    //TODO：任务3.x：实现 SSE 流式 AI 回复接口（见 task_breakdown.md 任务3.5）
     private final ConsultationService consultationService;
 
     /**
@@ -63,6 +65,21 @@ public class ConsultationController {
                 );
 
         return Result.success("消息发送成功", data);
+    }
+
+    /**
+     * 发送消息（SSE 流式）
+     * POST /api/consultations/{consultationId}/messages/stream
+     */
+    @PostMapping(value = "/{consultationId}/messages/stream",
+                 produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> sendMessageStream(
+            @PathVariable Long consultationId,
+            @Valid @RequestBody SendMessageRequest request,
+            HttpServletRequest httpRequest) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
+        return consultationService.sendMessageStream(consultationId, userId, request.getContent());
     }
 
     @GetMapping("/{consultationId}/messages")

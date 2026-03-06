@@ -450,39 +450,50 @@ curl -X PATCH http://localhost:8080/api/consultations/$CUID/status \
 
 ## 阶段3：Spring AI 集成
 
-> **前置说明（Spring AI 1.0.0-M6 关键 API）**
-> - 注入：`ChatClient.Builder` → 手动 build 一个 `ChatClient` Bean；勿直接 `@Autowired ChatClient`
-> - 调用：`chatClient.prompt().user(x).call().content()`（同步）；`.stream().content()` 返回 `Flux<String>`（流式）
-> - 向量检索：`SearchRequest.builder().query(q).topK(3).similarityThreshold(0.5).build()`
-> - 嵌入模型：注入 `EmbeddingModel`（旧版叫 `EmbeddingClient`，M6 已改名）
-> - artifact：`spring-ai-ollama-spring-boot-starter`（勿用新命名，M6 BOM 不存在）
+> **架构约定（禁止违反）**
+>
+> | 概念 | 说明 | 存储位置 |
+> |------|------|----------|
+> | **ChatHistory**（聊天记录） | 完整消息记录，用于前端展示、历史查询、PDF 报告 | 我们的 `messages` 表，由 `MessageMapper` 管理 |
+> | **ChatMemory**（LLM 上下文） | 发给大模型的滑动窗口上下文，由 Spring AI 自动管理 | Spring AI 的 `spring_ai_chat_memory` 表，由 `JdbcChatMemoryRepository` 管理 |
+>
+> **两者完全独立，不要混淆。**
+>
+> - RAG 流水线：`ChatClient → MessageChatMemoryAdvisor → QuestionAnswerAdvisor → Ollama`
+> - 禁止手动调用 `vectorStore.similaritySearch()`（除 KnowledgeService 内部）
+> - 禁止手动拼接 Prompt 字符串或创建 PromptBuilder
+> - 禁止手动查询 `messages` 表来构建 LLM 上下文（ChatMemory 已处理）
+> - VectorStore Bean 由 starter + yaml 自动配置，禁止手动定义
 
 ---
 
-### 任务3.1：配置 Spring AI
+### 任务3.1：配置 Spring AI（AiConfig）
 
 **Claude Code 提示词：**
 ```
-参考 doc/spring_ai_guide.md，创建 config/AiConfig.java：
+修改 config/AiConfig.java，在已有 @Bean ChatClient 基础上，新增 ChatMemory 相关 Bean：
 
 Spring AI 1.0.0-M6 自动配置说明：
-- Spring Boot 自动配置根据 application.yaml 创建 ChatModel 和 EmbeddingModel，无需手动声明
-- 若需自定义 ChatClient，注入 ChatClient.Builder 而不是直接 @Autowired ChatClient
+- ChatModel / EmbeddingModel / VectorStore 均由 starter + application.yaml 自动配置，无需手动定义
+- ChatClient 需手动从 ChatClient.Builder build，已完成
+- JdbcChatMemoryRepository / MessageWindowChatMemory 不在自动配置范围内，需手动定义
 
-AiConfig.java 只需要：
-1. 注入 ChatClient.Builder，build() 后声明为 @Bean ChatClient
-2. 配置 @Bean PgVectorStore（注入 JdbcTemplate 和 EmbeddingModel）
-   - initializeSchema = true（自动建 vector_store 表）
-   - dimensions = 768（与 bge-base-zh-v1.5 模型输出维度一致）
+新增以下两个 Bean：
 
-只生成这一个文件。
-```
+1. @Bean JdbcChatMemoryRepository
+   - 注入 JdbcTemplate
+   - JdbcChatMemoryRepository.builder().jdbcTemplate(jdbcTemplate).build()
+   - 启动时自动建 spring_ai_chat_memory 表（Spring AI 内置 schema）
 
-**验证：**
-```bash
-mvn spring-boot:run
-# 数据库中自动创建 vector_store 表：\dt
-psql -d health_diagnosis -c "\dt"
+2. @Bean InMemoryChatMemory（返回类型写 ChatMemory 接口）
+   - 注入 JdbcChatMemoryRepository
+   - InMemoryChatMemory.builder()
+       .chatMemoryRepository(repo)
+       .maxMessages(10)
+       .build()
+   - maxMessages=10 表示 LLM 上下文最多保留最近10条消息
+
+只修改 AiConfig.java，不动其他文件。
 ```
 
 ---
@@ -550,45 +561,55 @@ curl -X POST http://localhost:8080/api/admin/knowledge/import
 
 ---
 
-### 任务3.3：创建 RagService（同步版本）
+### 任务3.3：创建 RagService
 
 **Claude Code 提示词：**
 ```
-创建 service/RagService.java 和 util/PromptBuilder.java：
+创建 service/RagService.java，使用 Spring AI Advisor 流水线实现 RAG + 对话记忆：
 
-RagService.chat(String userInput, List<Message> history) -> String
-流程：
-1. 调用 KnowledgeService.searchSimilar(userInput, 3) 获取相关文档
-2. 构造知识上下文字符串（拼接每条 Document 的 title + content）
-3. 将 history 最近5条转为对话历史字符串（role: content 格式）
-4. 调用 PromptBuilder.build(userInput, knowledgeContext, historyContext) 构造完整 Prompt
-5. 调用 chatClient.prompt().user(prompt).call().content() 获取 AI 回复
-6. 返回回复字符串
+注入：
+- ChatClient（来自 AiConfig @Bean）
+- VectorStore（Spring AI 自动配置）
+- ChatMemory（来自 AiConfig @Bean MessageWindowChatMemory）
 
-RagService.chatStream(String userInput, List<Message> history) -> Flux<String>
-- 步骤1-4 与同步版本相同
-- 步骤5 改为：chatClient.prompt().user(prompt).stream().content()
-- 返回 Flux<String>
+架构说明：
+- MessageChatMemoryAdvisor：自动从 JdbcChatMemoryRepository 读取/写入该会话的 LLM 上下文
+  conversationId = consultationId.toString()，Spring AI 以此隔离不同会话的记忆
+- QuestionAnswerAdvisor：自动进行向量检索并将相关文档注入 Prompt
+- 两个 Advisor 链式叠加，无需手动处理上下文或检索
 
-PromptBuilder.build(String userInput, String knowledge, String history) -> String
-- 系统角色：你是一名专业的健康顾问助手，根据以下医学知识库内容和对话历史回答用户问题
-- 拼接知识上下文和对话历史
-- 末尾追加免责声明提示：请在回复末尾注明"免责声明：本内容仅供参考，不构成医疗诊断，如有不适请及时就医"
-- 在回复中如检测到高风险症状，请在回复末尾单独一行注明"风险等级：[low/medium/high/urgent]"
+1. chat(Long consultationId, String userInput) -> String
+   chatClient.prompt()
+     .advisors(
+         MessageChatMemoryAdvisor.builder(chatMemory)
+             .conversationId(consultationId.toString())
+             .build(),
+         new QuestionAnswerAdvisor(vectorStore)
+     )
+     .user(userInput)
+     .call()
+     .content()
 
-注意：RagService 注入 ChatClient（来自 AiConfig 的 @Bean），不要用 ChatClient.Builder 再次 build。
+2. chatStream(Long consultationId, String userInput) -> Flux<String>
+   同上，最后改为 .stream().content()
 
-只生成这两个文件。
-```
-
-**验证：**
-```bash
-# 启动后临时在测试中调用 RagService.chat()，观察日志和回复内容
+注意：
+- 不要手动查询 messages 表构建历史（ChatMemory 已处理 LLM 上下文）
+- 不要手动调用 vectorStore.similaritySearch()（QuestionAnswerAdvisor 已处理）
+- 不要创建 PromptBuilder 或拼接 Prompt 字符串
+- 只生成 RagService.java 一个文件
 ```
 
 ---
 
 ### 任务3.4：集成 RAG 到 sendMessage 并实现 SSE 流式接口
+
+**架构提示：**
+```
+ChatHistory（messages 表）：由本服务手动 insert，用于前端展示 / PDF 报告
+ChatMemory（spring_ai_chat_memory 表）：由 RagService 内的 MessageChatMemoryAdvisor 自动维护，用于 LLM 上下文
+两张表职责不同，sendMessage 无需查 messages 表来构建 LLM 历史。
+```
 
 **Claude Code 提示词：**
 ```
@@ -596,11 +617,12 @@ PromptBuilder.build(String userInput, String knowledge, String history) -> Strin
 
 修改一：ConsultationServiceImpl.sendMessage() 集成 RAG
 - 注入 RagService
-- 查询该会话 messages 表最近5条记录作为 history
-- 将固定回复 "收到您的消息，正在分析中..." 替换为 ragService.chat(content, history)
-- 解析 AI 回复中的"风险等级："关键词（正则或 contains），更新 Consultation.riskLevel
-  有效值：low / medium / high / urgent；未找到时不更新
-- 其余逻辑（权限校验、消息保存）不变
+- 将固定回复 "收到您的消息，正在分析中..." 替换为：
+    ragService.chat(consultationId, content)
+  （LLM 上下文由 MessageChatMemoryAdvisor 自动从 DB 读取，无需手动查 messages 表）
+- 解析 AI 回复中"风险等级："后的关键词（正则匹配 low/medium/high/urgent），
+  更新 Consultation.riskLevel；未找到时不更新
+- 其余逻辑（权限校验、用户消息保存、助手消息保存）不变
 
 修改二：新增流式接口
 在 ConsultationService 接口新增：
@@ -608,22 +630,20 @@ PromptBuilder.build(String userInput, String knowledge, String history) -> Strin
 
 ConsultationServiceImpl 实现：
 1. 权限校验（同 sendMessage）
-2. 保存用户消息（同步写数据库）
-3. 查询 history（最近5条）
-4. 调用 ragService.chatStream(content, history) 获取 Flux<String>
-5. 用 StringBuilder 收集完整回复，流结束时（doOnComplete）：
-   - 保存 assistantMessage 到 messages 表
-   - 解析并更新 riskLevel
-6. 将每个 token 包装为 ServerSentEvent.builder().data(token).build()
-7. 追加结束事件：data={"type":"done","riskLevel":"xxx"}
+2. 保存用户消息 → messages 表（ChatHistory）
+3. 调用 ragService.chatStream(consultationId, content) 获取 Flux<String>
+   （ChatMemory 由 Advisor 自动维护，无需手动传 history）
+4. 用 AtomicReference<StringBuilder> 收集完整回复，doOnComplete 时：
+   - 保存 assistantMessage → messages 表（ChatHistory）
+   - 正则解析 riskLevel，更新 consultations 表
+5. 将每个 token 包装为 ServerSentEvent.builder().data(token).build()
+6. 追加结束事件：data={"type":"done","riskLevel":"<level或null>"}
 
 ConsultationController 新增：
   POST /api/consultations/{consultationId}/messages/stream
-  @RequestHeader userId 统一从 httpRequest.getAttribute("userId") 获取（不要直接解析 JWT）
+  userId 从 httpRequest.getAttribute("userId") 获取
   produces = MediaType.TEXT_EVENT_STREAM_VALUE
   返回 Flux<ServerSentEvent<String>>
-
-注意：WebFlux 依赖已有，使用 reactor-core 的 Flux 即可；不需要引入额外依赖。
 
 只修改/新增涉及的方法，不动其他代码。
 ```
@@ -635,7 +655,6 @@ curl -X POST http://localhost:8080/api/consultations/$CUID/messages \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"content":"头痛发热三天了，有点恶心"}'
-# 应返回基于医学知识的专业回复，末尾含"风险等级："字样
 
 # SSE 流式接口
 curl -X POST http://localhost:8080/api/consultations/$CUID/messages/stream \
@@ -643,7 +662,6 @@ curl -X POST http://localhost:8080/api/consultations/$CUID/messages/stream \
   -H "Content-Type: application/json" \
   -d '{"content":"发烧39度怎么办"}' \
   --no-buffer
-# 应看到逐 token 的 SSE data 事件，最后一条为 done 事件
 ```
 
 ---

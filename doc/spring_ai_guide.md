@@ -133,12 +133,12 @@ spring:
       base-url: http://localhost:11434
       chat:
         options:
-          model: qwen3:7b
+          model: qwen3:4b
           temperature: 0.7
           num-ctx: 4096
       embedding:
         options:
-          model: bge-base-zh-v1.5
+          model: quentinz/bge-base-zh-v1.5:latest
     vectorstore:
       pgvector:
         index-type: HNSW

@@ -1,4 +1,20 @@
-# 技术规范
+# Project rule
+
+- 如果可以并且需要的话，规范使用@RequiredArgsConstructor注解等
+
+Do NOT implement PromptBuilder or manual prompt concatenation.
+
+Use Spring AI RAG pipeline only:
+
+SpringBoot → ChatClient → QuestionAnswerAdvisor → VectorStore(pgvector) → Ollama
+
+Advisor already handles:
+- vector search
+- context injection
+- prompt construction
+
+Avoid reinventing the wheel in all future tasks.
+
 
 ## 项目结构
 ```
@@ -111,10 +127,14 @@ public class Result<T> {
 
 ## 依赖版本
 - Spring Boot:3.4.3
-- 要用上Spring AI框架 1.0.0-M6
+- 要用上Spring AI框架 1.0.0-M6 
+  - ChatMemory 提供 prompt 上下文
+  - Advisor 链式组合（Memory + QuestionAnswer）
+- Ollama LLM 调用
 - JDK: 17
 - MyBatis-Plus: 3.5.10.1
-- PostgreSQL Driver: 42.x
+- PostgreSQL 存储聊天历史
+- pgvector 存储向量
 - JWT: jjwt 0.12.x
 
 ## 命名规范
@@ -124,5 +144,3 @@ public class Result<T> {
 - 数据库表名：小写下划线（user_info）
 
 
-## code required
-- 如果可以并且需要的话，规范使用@RequiredArgsConstructor注解等

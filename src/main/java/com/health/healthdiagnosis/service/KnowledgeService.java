@@ -33,13 +33,20 @@ public class KnowledgeService {
      */
     @PostConstruct
     public void initKnowledge() {
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM vector_store", Integer.class);
-        if (count == null || count == 0) {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM vector_store", Integer.class);
+            if (count == null || count == 0) {
+                int imported = importKnowledgeFromResources();
+                log.info("知识库初始化完成，共导入 {} 条", imported);
+            } else {
+                log.info("知识库已有 {} 条数据，跳过初始化导入", count);
+            }
+        } catch (Exception e) {
+            // 表可能还未创建，先尝试导入
+            log.warn("检查知识库失败，尝试直接导入：{}", e.getMessage());
             int imported = importKnowledgeFromResources();
             log.info("知识库初始化完成，共导入 {} 条", imported);
-        } else {
-            log.info("知识库已有 {} 条数据，跳过初始化导入", count);
         }
     }
 

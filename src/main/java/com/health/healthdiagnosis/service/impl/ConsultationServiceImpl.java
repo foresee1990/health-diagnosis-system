@@ -14,13 +14,19 @@ import com.health.healthdiagnosis.exception.BusinessException;
 import com.health.healthdiagnosis.mapper.ConsultationMapper;
 import com.health.healthdiagnosis.mapper.MessageMapper;
 import com.health.healthdiagnosis.service.ConsultationService;
+import com.health.healthdiagnosis.service.RagService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.health.healthdiagnosis.common.ErrorCode.ACCESS_DENIED;
 import static com.health.healthdiagnosis.common.ErrorCode.CONSULTATION_ALREADY_COMPLETED;
@@ -30,8 +36,12 @@ import static com.health.healthdiagnosis.common.ErrorCode.CONSULTATION_ALREADY_C
 @RequiredArgsConstructor
 public class ConsultationServiceImpl implements ConsultationService {
 
+    private static final Pattern RISK_LEVEL_PATTERN =
+            Pattern.compile("风险等级[：:]\\s*(low|medium|high|urgent)", Pattern.CASE_INSENSITIVE);
+
     private final ConsultationMapper consultationMapper;
     private final MessageMapper messageMapper;
+    private final RagService ragService;
 
 
     @Override
@@ -88,8 +98,16 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         messageMapper.insert(userMessage);
 
-        // TODO: 固定回复（代替AI）
-        String reply = "收到您的消息，正在分析中...";
+        // RAG 同步调用（ChatMemory 由 MessageChatMemoryAdvisor 自动维护）
+        String reply = ragService.chat(consultationId, content);
+
+        // 解析风险等级并更新 consultation
+        String riskLevel = parseRiskLevel(reply);
+        if (riskLevel != null) {
+            consultation.setRiskLevel(riskLevel);
+            consultationMapper.updateById(consultation);
+        }
+        log.info("RAG 回复完成, consultationId={}, 风险等级={}", consultationId, riskLevel);
 
         Message assistantMessage = new Message();
         assistantMessage.setConsultationId(consultationId);
@@ -98,7 +116,6 @@ public class ConsultationServiceImpl implements ConsultationService {
         assistantMessage.setCreatedAt(LocalDateTime.now());
 
         messageMapper.insert(assistantMessage);
-
 
         return new SendMessageResponse(
                 MessageResponse.fromEntity(userMessage),
@@ -192,6 +209,64 @@ public class ConsultationServiceImpl implements ConsultationService {
         consultationMapper.updateById(consultation);
         log.info("会话已结束, consultationId={}", consultationId);
         return convertToItem(consultation);
+    }
+
+    @Override
+    public Flux<ServerSentEvent<String>> sendMessageStream(Long consultationId,
+                                                           Long userId,
+                                                           String content) {
+        // 1. 权限 & 状态校验（同步）
+        Consultation consultation = consultationMapper.selectById(consultationId);
+        if (consultation == null || !consultation.getUserId().equals(userId)) {
+            throw new BusinessException(ACCESS_DENIED, "ACCESS_DENIED");
+        }
+        if (!"ongoing".equals(consultation.getStatus())) {
+            throw new BusinessException(CONSULTATION_ALREADY_COMPLETED,
+                    "CONSULTATION_ALREADY_COMPLETED");
+        }
+
+        // 2. 写入 user 消息到 ChatHistory（messages 表）
+        Message userMessage = new Message();
+        userMessage.setConsultationId(consultationId);
+        userMessage.setRole("user");
+        userMessage.setContent(content);
+        userMessage.setCreatedAt(LocalDateTime.now());
+        messageMapper.insert(userMessage);
+
+        // 3. 流式 RAG（ChatMemory 由 Advisor 自动维护）
+        AtomicReference<StringBuilder> buffer = new AtomicReference<>(new StringBuilder());
+
+        return ragService.chatStream(consultationId, content)
+                .doOnNext(token -> buffer.get().append(token))
+                .map(token -> ServerSentEvent.<String>builder().data(token).build())
+                .concatWith(Flux.defer(() -> {
+                    // 4. 流结束后：写入 assistant 消息到 ChatHistory，更新风险等级
+                    String fullReply = buffer.get().toString();
+
+                    Message assistantMessage = new Message();
+                    assistantMessage.setConsultationId(consultationId);
+                    assistantMessage.setRole("assistant");
+                    assistantMessage.setContent(fullReply);
+                    assistantMessage.setCreatedAt(LocalDateTime.now());
+                    messageMapper.insert(assistantMessage);
+
+                    String riskLevel = parseRiskLevel(fullReply);
+                    if (riskLevel != null) {
+                        consultation.setRiskLevel(riskLevel);
+                        consultationMapper.updateById(consultation);
+                    }
+                    log.info("流式回复完成, consultationId={}, 风险等级={}", consultationId,
+                            riskLevel);
+
+                    String donePayload = "{\"type\":\"done\",\"riskLevel\":\""
+                            + (riskLevel != null ? riskLevel : "") + "\"}";
+                    return Flux.just(ServerSentEvent.<String>builder().data(donePayload).build());
+                }));
+    }
+
+    private String parseRiskLevel(String reply) {
+        Matcher m = RISK_LEVEL_PATTERN.matcher(reply);
+        return m.find() ? m.group(1).toLowerCase() : null;
     }
 
     private ConsultationItemResponse convertToItem(Consultation c) {

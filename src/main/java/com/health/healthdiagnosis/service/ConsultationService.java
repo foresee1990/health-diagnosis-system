@@ -2,6 +2,8 @@ package com.health.healthdiagnosis.service;
 
 import com.health.healthdiagnosis.dto.request.CreateConsultationRequest;
 import com.health.healthdiagnosis.dto.response.*;
+import org.springframework.http.codec.ServerSentEvent;
+import reactor.core.publisher.Flux;
 
 /**
  * @author WU,Rowan
@@ -43,4 +45,10 @@ public interface ConsultationService {
      *结束会话
      */
     ConsultationItemResponse completeConsultation(Long consultationId, Long userId);
+
+    /**
+     * 发送消息（SSE 流式）
+     * 先写 user 消息到 ChatHistory，再流式推送 AI 回复，流结束后写 assistant 消息到 ChatHistory
+     */
+    Flux<ServerSentEvent<String>> sendMessageStream(Long consultationId, Long userId, String content);
 }

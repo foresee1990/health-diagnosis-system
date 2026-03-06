@@ -16,7 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 认证控制器
+ * AuthController
  */
 @RestController
 @RequestMapping("/api")

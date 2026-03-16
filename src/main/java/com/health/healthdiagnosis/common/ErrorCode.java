@@ -82,4 +82,19 @@ public final class ErrorCode {
      * 问诊会话已完成，无法进行操作
      */
     public static final int CONSULTATION_ALREADY_COMPLETED = 1007;
+
+    /**
+     * 用户已被禁用
+     */
+    public static final int USER_BANNED = 1008;
+
+    /**
+     * 旧密码错误
+     */
+    public static final int WRONG_OLD_PASSWORD = 1009;
+
+    /**
+     * 不允许操作管理员账号
+     */
+    public static final int CANNOT_OPERATE_ADMIN = 1010;
 }

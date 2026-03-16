@@ -96,8 +96,10 @@ Authorization: Bearer {token}
 
 **业务规则：**
 - 验证用户名与密码
+- 若用户状态为 `BANNED`，返回 403，拒绝登录
 - 生成 JWT Token，有效期 24 小时
-- Token Payload 包含 userId 和 username
+- Token Payload 包含 userId、username、role
+- 响应中返回 role 字段，前端据此控制菜单显示
 
 ---
 
@@ -125,12 +127,66 @@ Authorization: Bearer {token}
 ```
 
 **业务规则：**
-- 从 Token 中解析 userId，查询并返回用户信息
+- 从 Token 中解析 userId，查询并返回用户信息（含 role、status）
 - 用于前端页面刷新后恢复登录状态
 
 ---
 
-### 2. 问诊会话接口
+### 2. 用户中心接口
+
+#### 2.1 修改密码
+**接口：** `PUT /api/users/me/password`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**请求体：**
+```json
+{
+  "oldPassword": "123456",
+  "newPassword": "new_password"
+}
+```
+
+**响应：**
+```json
+{ "code": 200, "message": "密码修改成功", "data": null, "timestamp": 1710468600000 }
+```
+
+**业务规则：**
+- 校验旧密码正确，否则返回 400
+- 新密码长度 6~20 字符
+
+---
+
+#### 2.2 更新个人信息
+**接口：** `PUT /api/users/me/profile`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**请求体：**
+```json
+{
+  "email": "newemail@example.com"
+}
+```
+
+**响应：**
+```json
+{
+  "code": 200,
+  "message": "个人信息更新成功",
+  "data": { "userId": 1, "username": "testuser", "email": "newemail@example.com", "createdAt": "2024-01-01T00:00:00" },
+  "timestamp": 1710468600000
+}
+```
+
+**业务规则：**
+- 仅允许修改 email；用户名不可修改
+- 邮箱格式校验
+
+---
+
+### 3. 问诊会话接口
 
 #### 2.1 创建问诊会话
 **接口：** `POST /api/consultations`
@@ -475,6 +531,175 @@ Authorization: Bearer {token}
 
 ---
 
+### 5. 管理员中心接口
+
+> **权限要求：** 所有 `/api/admin/**` 接口要求 Token 中 role 为 `ADMIN`，否则返回 403。
+
+#### 5.1 用户列表查询（脱敏）
+**接口：** `GET /api/admin/users`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**查询参数：**
+- `page`：页码（默认 1）
+- `size`：每页数量（默认 10）
+- `keyword`：用户名关键词（可选，模糊搜索）
+- `status`：状态筛选（可选，ACTIVE/BANNED）
+
+**响应：**
+```json
+{
+  "code": 200,
+  "message": "获取成功",
+  "data": {
+    "total": 100,
+    "page": 1,
+    "size": 10,
+    "pages": 10,
+    "users": [
+      {
+        "userId": 1,
+        "username": "testuser",
+        "email": "t***@example.com",
+        "role": "USER",
+        "status": "ACTIVE",
+        "consultationCount": 5,
+        "lastConsultationAt": "2024-03-15T10:45:00",
+        "createdAt": "2024-01-01T00:00:00"
+      }
+    ]
+  },
+  "timestamp": 1710468600000
+}
+```
+
+**隐私规范：**
+- ⚠️ 返回数据**必须剔除 messages 关联信息**，仅保留会话元数据（时间、状态、风险等级）
+- 邮箱脱敏：`t***@example.com`（`@` 前保留首字符，其余替换为 `***`）
+- 绝对禁止在此接口返回任何对话内容
+
+---
+
+#### 5.2 禁用用户
+**接口：** `PATCH /api/admin/users/{userId}/ban`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**响应：**
+```json
+{ "code": 200, "message": "用户已禁用", "data": null, "timestamp": 1710468600000 }
+```
+
+**业务规则：**
+- 不允许禁用自身或其他 ADMIN
+- 记录操作日志到 `system_logs` 表
+
+---
+
+#### 5.3 启用用户
+**接口：** `PATCH /api/admin/users/{userId}/unban`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**响应：**
+```json
+{ "code": 200, "message": "用户已启用", "data": null, "timestamp": 1710468600000 }
+```
+
+**业务规则：**
+- 记录操作日志到 `system_logs` 表
+
+---
+
+#### 5.4 重置用户密码
+**接口：** `POST /api/admin/users/{userId}/password/reset`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**响应：**
+```json
+{
+  "code": 200,
+  "message": "密码重置成功",
+  "data": { "newPassword": "Abc12345" },
+  "timestamp": 1710468600000
+}
+```
+
+**业务规则：**
+- 随机生成 8 位临时密码（含大小写字母+数字），BCrypt 加密后存库
+- 不允许重置其他 ADMIN 的密码
+- 记录操作日志
+
+---
+
+#### 5.5 查看用户会话元数据（脱敏，不含消息内容）
+**接口：** `GET /api/admin/users/{userId}/consultations`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**响应：**
+```json
+{
+  "code": 200,
+  "message": "获取成功",
+  "data": [
+    {
+      "consultationId": 1,
+      "status": "completed",
+      "riskLevel": "high",
+      "chiefComplaint": "胸闷气短",
+      "createdAt": "2024-03-15T10:30:00",
+      "completedAt": "2024-03-15T10:45:00"
+    }
+  ],
+  "timestamp": 1710468600000
+}
+```
+
+**隐私规范：** ⚠️ **仅返回会话元数据，严禁返回 messages 表任何字段**
+
+---
+
+#### 5.6 查看系统操作日志
+**接口：** `GET /api/admin/logs`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**查询参数：**
+- `page`：页码（默认 1）
+- `size`：每页数量（默认 20）
+- `operatorId`：操作人ID（可选）
+
+**响应：**
+```json
+{
+  "code": 200,
+  "message": "获取成功",
+  "data": {
+    "total": 50,
+    "page": 1,
+    "size": 20,
+    "pages": 3,
+    "logs": [
+      {
+        "id": 1,
+        "operatorId": 2,
+        "operatorUsername": "admin",
+        "action": "BAN_USER",
+        "targetUserId": 5,
+        "targetUsername": "baduser",
+        "details": "{\"reason\": \"违规操作\"}",
+        "createdAt": "2024-03-15T10:00:00"
+      }
+    ]
+  },
+  "timestamp": 1710468600000
+}
+```
+
+---
+
 ## 错误响应示例
 
 ```json
@@ -526,17 +751,25 @@ Authorization: Bearer {token}
 
 ## 接口汇总
 
-| 方法 | 路径 | 说明 | 需要认证 |
-|------|------|------|----------|
-| POST | /api/auth/register | 用户注册 | 否 |
-| POST | /api/auth/login | 用户登录 | 否 |
-| GET | /api/users/me | 获取当前用户信息 | 是 |
-| POST | /api/consultations | 创建问诊会话 | 是 |
-| GET | /api/consultations | 获取问诊列表 | 是 |
-| POST | /api/consultations/{id}/messages | 发送消息（同步） | 是 |
-| POST | /api/consultations/{id}/messages/stream | 发送消息（SSE流式） | 是 |
-| GET | /api/consultations/{id}/messages | 获取会话消息历史 | 是 |
-| PATCH | /api/consultations/{id}/status | 结束问诊 | 是 |
-| POST | /api/consultations/{id}/report | 生成报告 | 是 |
-| GET | /api/consultations/{id}/report | 查询报告信息 | 是 |
-| GET | /api/reports/{reportId}/file | 下载报告文件 | 是 |
+| 方法 | 路径 | 说明 | 需要认证 | 需要角色 |
+|------|------|------|----------|----------|
+| POST | /api/auth/register | 用户注册 | 否 | - |
+| POST | /api/auth/login | 用户登录 | 否 | - |
+| GET | /api/users/me | 获取当前用户信息 | 是 | USER/ADMIN |
+| PUT | /api/users/me/password | 修改密码 | 是 | USER/ADMIN |
+| PUT | /api/users/me/profile | 更新个人信息 | 是 | USER/ADMIN |
+| POST | /api/consultations | 创建问诊会话 | 是 | USER |
+| GET | /api/consultations | 获取问诊列表 | 是 | USER |
+| POST | /api/consultations/{id}/messages | 发送消息（同步） | 是 | USER |
+| POST | /api/consultations/{id}/messages/stream | 发送消息（SSE流式） | 是 | USER |
+| GET | /api/consultations/{id}/messages | 获取会话消息历史 | 是 | USER |
+| PATCH | /api/consultations/{id}/status | 结束问诊 | 是 | USER |
+| POST | /api/consultations/{id}/report | 生成报告 | 是 | USER |
+| GET | /api/consultations/{id}/report | 查询报告信息 | 是 | USER |
+| GET | /api/reports/{reportId}/file | 下载报告文件 | 是 | USER |
+| GET | /api/admin/users | 用户列表（脱敏） | 是 | ADMIN |
+| PATCH | /api/admin/users/{id}/ban | 禁用用户 | 是 | ADMIN |
+| PATCH | /api/admin/users/{id}/unban | 启用用户 | 是 | ADMIN |
+| POST | /api/admin/users/{id}/password/reset | 重置用户密码 | 是 | ADMIN |
+| GET | /api/admin/users/{id}/consultations | 查看用户会话元数据 | 是 | ADMIN |
+| GET | /api/admin/logs | 系统操作日志 | 是 | ADMIN |

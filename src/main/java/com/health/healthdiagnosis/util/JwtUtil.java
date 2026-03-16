@@ -57,10 +57,11 @@ public class JwtUtil {
      * @param username 用户名
      * @return JWT 字符串
      */
-    public String generateToken(Long userId, String username) {
+    public String generateToken(Long userId, String username, String role) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
+        claims.put("role", role);
 
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expiration);
@@ -126,6 +127,18 @@ public class JwtUtil {
      */
     public String getUsername(String token) {
         return getClaimFromToken(token, Claims::getSubject);
+    }
+
+    /**
+     * 获取用户角色
+     *
+     * @param token JWT 字符串
+     * @return 角色字符串 (USER / ADMIN)
+     */
+    public String getRole(String token) {
+        Claims claims = parseToken(token);
+        Object roleObj = claims.get("role");
+        return roleObj != null ? roleObj.toString() : "USER";
     }
 
     /**

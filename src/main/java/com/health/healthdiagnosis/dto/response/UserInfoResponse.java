@@ -35,6 +35,16 @@ public class UserInfoResponse {
     private String email;
 
     /**
+     * 角色：USER / ADMIN
+     */
+    private String role;
+
+    /**
+     * 状态：ACTIVE / BANNED
+     */
+    private String status;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createdAt;

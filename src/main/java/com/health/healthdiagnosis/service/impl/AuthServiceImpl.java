@@ -47,11 +47,13 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.USERNAME_EXISTS, USER_ALREADY_EXISTS);
         }
 
-        // 2. 构建用户对象，密码 BCrypt 加密
+        // 2. 构建用户对象，密码 BCrypt 加密，默认角色 USER、状态 ACTIVE
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPasswordHash(bCryptPasswordEncoder.encode(request.getPassword()));
         user.setEmail(request.getEmail());
+        user.setRole("USER");
+        user.setStatus("ACTIVE");
 
         // 3. 插入数据库（MyBatis-Plus 会自动将生成的 id 回填到 user 对象）
         userMapper.insert(user);
@@ -88,14 +90,22 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.WRONG_PASSWORD, UserMessageConstants.WRONG_PASSWORD);
         }
 
-        // 3. 生成JWT Token（有效期24小时，Payload包含userId和username）
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername());
+        // 3. 校验账号是否被禁用
+        if ("BANNED".equals(user.getStatus())) {
+            log.warn("用户登录失败：账号已被禁用，username={}", request.getUsername());
+            throw new BusinessException(ErrorCode.USER_BANNED, "账号已被禁用，请联系管理员");
+        }
 
-        // 4. 构造并返回登录响应
+        // 4. 生成JWT Token（有效期24小时，Payload包含userId、username、role）
+        String role = user.getRole() != null ? user.getRole() : "USER";
+        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), role);
+
+        // 5. 构造并返回登录响应
         LoginResponse loginResponse = LoginResponse.builder()
                 .token(token)
                 .userId(user.getId())
                 .username(user.getUsername())
+                .role(role)
                 .build();
 
         log.info("用户登录成功：username={}, userId={}", user.getUsername(), user.getId());
@@ -121,7 +131,9 @@ public class AuthServiceImpl implements AuthService {
                 .userId(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
-                .createdAt(user.getCreatedAt()) // 对应数据库createdAt字段，需确保实体类字段名匹配
+                .role(user.getRole())
+                .status(user.getStatus())
+                .createdAt(user.getCreatedAt())
                 .build();
 
         log.info("获取用户信息成功：userId={}, username={}", userId, user.getUsername());

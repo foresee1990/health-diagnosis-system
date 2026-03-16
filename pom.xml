@@ -59,13 +59,19 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- MyBatis-Plus（Spring Boot 3.x 专用，不能用 mybatis-plus-boot-starter） -->
+        <!-- MyBatis-Plus（Spring Boot 3.x 专用） -->
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
             <version>3.5.10.1</version>
         </dependency>
 
+        <!-- MyBatis-Plus 分页插件（3.5.9+ 必须单独引入） -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+            <version>3.5.10.1</version>
+        </dependency>
         <!-- ===== 安全 ===== -->
         <!-- 仅引入 BCrypt 工具类，不激活 Spring Security 过滤链 -->
         <dependency>

@@ -16,6 +16,8 @@
 | username | VARCHAR(50) | UNIQUE NOT NULL | 用户名，唯一 |
 | password_hash | VARCHAR(255) | NOT NULL | BCrypt加密后的密码 |
 | email | VARCHAR(100) | | 邮箱（可选） |
+| role | VARCHAR(20) | NOT NULL DEFAULT 'USER' | 角色：USER / ADMIN |
+| status | VARCHAR(20) | NOT NULL DEFAULT 'ACTIVE' | 状态：ACTIVE / BANNED |
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 注册时间 |
 
 **索引：**
@@ -40,6 +42,10 @@
 **索引：**
 - PRIMARY KEY (id)
 - INDEX idx_user_consultations (user_id, created_at DESC)
+
+---
+
+**隐私说明：** `messages` 表（问诊对话内容）属于用户隐私数据，**管理员不可见**。管理员仅可查看 `consultations` 表的元数据（时间、状态、风险等级），不可访问具体对话内容。
 
 ---
 
@@ -88,9 +94,30 @@
 
 ---
 
+### 5. system_logs - 系统操作日志表
+记录管理员的操作行为，用于审计和追溯。
+
+| 字段名 | 类型 | 约束 | 说明 |
+|--------|------|------|------|
+| id | SERIAL | PRIMARY KEY | 日志ID |
+| operator_id | INTEGER | NOT NULL REFERENCES users(id) | 操作人ID（管理员） |
+| action | VARCHAR(50) | NOT NULL | 操作类型：BAN_USER / UNBAN_USER / RESET_PASSWORD 等 |
+| target_user_id | INTEGER | REFERENCES users(id) | 目标用户ID（可为空，如查询列表时） |
+| details | TEXT | | 操作详情（JSON格式，如变更前后的值） |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 操作时间 |
+
+**索引：**
+- PRIMARY KEY (id)
+- INDEX idx_operator_logs (operator_id, created_at DESC)
+- INDEX idx_target_user_logs (target_user_id)
+
+---
+
 ## 表关系图
  users (1) ──────< (N) consultations (1) ──────< (N) messages
                                       (1) ──────< (1) reports
+ users (1) ──────< (N) system_logs (operator)
+ users (1) ──────< (N) system_logs (target_user)
 
 
 ## 初始化SQL脚本
@@ -105,6 +132,8 @@ id SERIAL PRIMARY KEY,
 username VARCHAR(50) UNIQUE NOT NULL,
 password_hash VARCHAR(255) NOT NULL,
 email VARCHAR(100),
+role VARCHAR(20) NOT NULL DEFAULT 'USER' CHECK (role IN ('USER', 'ADMIN')),
+status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'BANNED')),
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -149,6 +178,23 @@ CREATE INDEX idx_consultation_messages ON messages(consultation_id, created_at);
 
 
 CREATE INDEX idx_consultation_report ON reports(consultation_id);
+
+
+CREATE TABLE system_logs (
+id SERIAL PRIMARY KEY,
+operator_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+action VARCHAR(50) NOT NULL,
+target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+details TEXT,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_operator_logs ON system_logs(operator_id, created_at DESC);
+CREATE INDEX idx_target_user_logs ON system_logs(target_user_id);
+
+-- 迁移现有数据库（已存在 users 表时执行）
+-- ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'USER' CHECK (role IN ('USER', 'ADMIN'));
+-- ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'BANNED'));
 
 
 CREATE INDEX idx_embedding ON medical_knowledge

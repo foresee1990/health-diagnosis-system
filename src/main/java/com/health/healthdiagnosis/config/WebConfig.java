@@ -5,6 +5,7 @@ package com.health.healthdiagnosis.config;
  * @date 2026/3/5
  */
 
+import com.health.healthdiagnosis.interceptor.AdminInterceptor;
 import com.health.healthdiagnosis.interceptor.AuthInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -21,17 +22,23 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
+    private final AdminInterceptor adminInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 1. 认证拦截器：验证 Token，注入 userId 和 role（必须最先执行）
         registry.addInterceptor(authInterceptor)
-                // 拦截所有路径
                 .addPathPatterns("/api/**")
-                // 排除不需要认证的路径 (如登录、注册、公开接口)
                 .excludePathPatterns(
-                        "/api/auth/**",      // 认证相关接口 (登录/注册)
-                        "/api/public/**"     // 其他公开接口 (如果有)
-                );
+                        "/api/auth/**",
+                        "/api/public/**"
+                )
+                .order(1);
+
+        // 2. 管理员拦截器：校验 role == ADMIN（依赖 AuthInterceptor 先注入 role）
+        registry.addInterceptor(adminInterceptor)
+                .addPathPatterns("/api/admin/**")
+                .order(2);
     }
 
     /**

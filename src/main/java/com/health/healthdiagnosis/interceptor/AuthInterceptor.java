@@ -42,14 +42,11 @@ public class AuthInterceptor implements HandlerInterceptor {
             // 2. 调用 JwtUtil 解析并验证 Token
             // 如果 Token 过期或签名错误，parseToken 会抛出异常
             Long userId = jwtUtil.getUserId(token);
+            String role = jwtUtil.getRole(token);
 
-            // 3. 验证通过，将 userId 存入 request 属性，供 Controller 使用
+            // 3. 验证通过，将 userId 和 role 存入 request 属性，供 Controller 和 AdminInterceptor 使用
             request.setAttribute("userId", userId);
-
-            // TODO：也可以顺便存入 username，如果需要的话
-            //  TODO：还有Redis 缓存，用于后续权限验证，过期时间
-            // String username = jwtUtil.getUsername(token);
-            // request.setAttribute("username", username);
+            request.setAttribute("role", role);
 
             return true; // 放行，继续执行 Controller
 

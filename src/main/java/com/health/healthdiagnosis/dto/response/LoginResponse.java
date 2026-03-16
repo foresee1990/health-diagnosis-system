@@ -33,5 +33,8 @@ public class LoginResponse {
      */
     private String username;
 
-    //TODO:暂时不需要别的信息？
+    /**
+     * 角色：USER / ADMIN
+     */
+    private String role;
 }

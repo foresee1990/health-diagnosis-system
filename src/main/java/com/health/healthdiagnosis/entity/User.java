@@ -46,6 +46,18 @@ public class User {
     private String email;
 
     /**
+     * 角色 (对应字段: role)
+     * 枚举值：USER / ADMIN
+     */
+    private String role;
+
+    /**
+     * 状态 (对应字段: status)
+     * 枚举值：ACTIVE / BANNED
+     */
+    private String status;
+
+    /**
      * 注册时间 (对应字段: created_at)
      * 默认当前时间戳
      */

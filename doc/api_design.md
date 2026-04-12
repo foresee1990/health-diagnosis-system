@@ -161,6 +161,95 @@ Authorization: Bearer {token}
 #### 2.2 更新个人信息
 **接口：** `PUT /api/users/me/profile`
 
+---
+
+#### 2.3 获取健康档案
+**接口：** `GET /api/users/me/health-profile`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**响应（已填写）：**
+```json
+{
+  "code": 200,
+  "message": "获取成功",
+  "data": {
+    "userId": 1,
+    "age": 35,
+    "gender": "MALE",
+    "allergies": "青霉素",
+    "chronicDiseases": "高血压",
+    "currentMedications": "氨氯地平5mg",
+    "updatedAt": "2026-04-12T10:00:00",
+    "filled": true
+  },
+  "timestamp": 1710468600000
+}
+```
+
+**响应（未填写）：**
+```json
+{
+  "code": 200,
+  "message": "获取成功",
+  "data": { "userId": 1, "filled": false },
+  "timestamp": 1710468600000
+}
+```
+
+**业务规则：**
+- 档案未填写时返回空对象（`filled: false`），不报 404
+- 前端可据此显示"完善健康档案"引导
+
+---
+
+#### 2.4 创建/更新健康档案
+**接口：** `PUT /api/users/me/health-profile`
+
+**请求 Header：** `Authorization: Bearer {token}`
+
+**请求体（所有字段可选）：**
+```json
+{
+  "age": 35,
+  "gender": "MALE",
+  "allergies": "青霉素、花粉",
+  "chronicDiseases": "高血压、2型糖尿病",
+  "currentMedications": "氨氯地平5mg"
+}
+```
+
+**字段说明：**
+- `gender`：枚举值 `MALE` / `FEMALE` / `OTHER`
+- `allergies`：过敏史，自由文本，不超过200字
+- `chronicDiseases`：基础疾病，自由文本，不超过200字
+- `currentMedications`：当前用药，自由文本，不超过200字
+
+**响应：**
+```json
+{
+  "code": 200,
+  "message": "健康档案已保存",
+  "data": {
+    "userId": 1,
+    "age": 35,
+    "gender": "MALE",
+    "allergies": "青霉素、花粉",
+    "chronicDiseases": "高血压、2型糖尿病",
+    "currentMedications": "氨氯地平5mg",
+    "updatedAt": "2026-04-12T10:00:00",
+    "filled": true
+  },
+  "timestamp": 1710468600000
+}
+```
+
+**业务规则：**
+- upsert 语义：档案不存在则创建，已存在则全量覆盖
+- 档案信息在用户发送问诊消息时自动注入 AI 系统提示词，使 AI 回答更个性化
+
+---
+
 **请求 Header：** `Authorization: Bearer {token}`
 
 **请求体：**
@@ -758,6 +847,8 @@ Authorization: Bearer {token}
 | GET | /api/users/me | 获取当前用户信息 | 是 | USER/ADMIN |
 | PUT | /api/users/me/password | 修改密码 | 是 | USER/ADMIN |
 | PUT | /api/users/me/profile | 更新个人信息 | 是 | USER/ADMIN |
+| GET | /api/users/me/health-profile | 获取健康档案 | 是 | USER/ADMIN |
+| PUT | /api/users/me/health-profile | 创建/更新健康档案 | 是 | USER/ADMIN |
 | POST | /api/consultations | 创建问诊会话 | 是 | USER |
 | GET | /api/consultations | 获取问诊列表 | 是 | USER |
 | POST | /api/consultations/{id}/messages | 发送消息（同步） | 是 | USER |

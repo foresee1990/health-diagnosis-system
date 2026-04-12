@@ -14,6 +14,7 @@ import com.health.healthdiagnosis.exception.BusinessException;
 import com.health.healthdiagnosis.mapper.ConsultationMapper;
 import com.health.healthdiagnosis.mapper.MessageMapper;
 import com.health.healthdiagnosis.service.ConsultationService;
+import com.health.healthdiagnosis.service.HealthProfileService;
 import com.health.healthdiagnosis.service.RagService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final ConsultationMapper consultationMapper;
     private final MessageMapper messageMapper;
     private final RagService ragService;
+    private final HealthProfileService healthProfileService;
 
 
     @Override
@@ -120,7 +122,8 @@ public class ConsultationServiceImpl implements ConsultationService {
         messageMapper.insert(userMessage);
 
         // RAG 同步调用（ChatMemory 由 MessageChatMemoryAdvisor 自动维护）
-        String reply = ragService.chat(consultationId, content);
+        String patientContext = healthProfileService.buildPatientContext(userId);
+        String reply = ragService.chat(consultationId, content, patientContext);
 
         // 解析风险等级并更新 consultation
         String riskLevel = parseRiskLevel(reply);
@@ -255,9 +258,10 @@ public class ConsultationServiceImpl implements ConsultationService {
         messageMapper.insert(userMessage);
 
         // 3. 流式 RAG（ChatMemory 由 Advisor 自动维护）
+        String patientContext = healthProfileService.buildPatientContext(userId);
         AtomicReference<StringBuilder> buffer = new AtomicReference<>(new StringBuilder());
 
-        return ragService.chatStream(consultationId, content)
+        return ragService.chatStream(consultationId, content, patientContext)
                 .doOnNext(token -> buffer.get().append(token))
                 .map(token -> ServerSentEvent.<String>builder().data(token).build())
                 .concatWith(Flux.defer(() -> {

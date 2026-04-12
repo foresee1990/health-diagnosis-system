@@ -10,6 +10,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -40,7 +41,10 @@ public class RagService {
                         MessageChatMemoryAdvisor.builder(chatMemory)
                                 .conversationId(consultationId.toString())
                                 .build(),
-                        new QuestionAnswerAdvisor(vectorStore)
+                        new QuestionAnswerAdvisor(vectorStore, SearchRequest.builder()
+                                        .topK(5)
+                                        .similarityThreshold(0.55)
+                                        .build())
                 )
                 .user(userInput)
                 .call()
@@ -62,7 +66,10 @@ public class RagService {
                         MessageChatMemoryAdvisor.builder(chatMemory)
                                 .conversationId(consultationId.toString())
                                 .build(),
-                        new QuestionAnswerAdvisor(vectorStore)
+                        new QuestionAnswerAdvisor(vectorStore, SearchRequest.builder()
+                                        .topK(5)
+                                        .similarityThreshold(0.55)
+                                        .build())
                 )
                 .user(userInput)
                 .stream()

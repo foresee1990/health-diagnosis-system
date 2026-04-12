@@ -37,7 +37,19 @@ import static com.health.healthdiagnosis.common.ErrorCode.CONSULTATION_ALREADY_C
 public class ConsultationServiceImpl implements ConsultationService {
 
     private static final Pattern RISK_LEVEL_PATTERN =
-            Pattern.compile("风险等级[：:]\\s*(low|medium|high|urgent)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("风险等级[：:＝=]?\\s*(low|medium|high|urgent)", Pattern.CASE_INSENSITIVE);
+
+    private static final String WELCOME_MESSAGE = """
+            您好！我是 AI 辅助问诊助手，我会根据医学知识库为您提供参考建议。
+
+            为了给您更准确的回复，请尽量描述：
+            - **主要症状**（如头痛、发烧、咳嗽等）
+            - **持续时间**（几小时/几天）
+            - **严重程度**（轻微/明显/剧烈）
+            - **伴随症状**（如有）
+
+            请注意：本系统仅供参考，不能替代专业医生诊断，如症状严重请及时就医。
+            """;
 
     private final ConsultationMapper consultationMapper;
     private final MessageMapper messageMapper;
@@ -67,8 +79,17 @@ public class ConsultationServiceImpl implements ConsultationService {
         firstMessage.setCreatedAt(LocalDateTime.now());
 
         messageMapper.insert(firstMessage);
-        log.info("会话创建成功");
-        // 3. 返回响应
+
+        // 3. 插入固定引导消息（assistant 角色），引导用户描述症状
+        Message welcomeMessage = new Message();
+        welcomeMessage.setConsultationId(consultationId);
+        welcomeMessage.setRole("assistant");
+        welcomeMessage.setContent(WELCOME_MESSAGE);
+        welcomeMessage.setCreatedAt(LocalDateTime.now());
+        messageMapper.insert(welcomeMessage);
+
+        log.info("会话创建成功, consultationId={}", consultationId);
+        // 4. 返回响应
         return ConsultationResponse.fromEntity(consultation);
     }
 

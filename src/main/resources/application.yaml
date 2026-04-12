@@ -22,6 +22,7 @@ spring:
           model: qwen3:4b
           temperature: 0.7
           num-ctx: 4096
+          think: false        # 关闭 qwen3 thinking 模式，不输出 <think> 内容
       embedding:
         options:
           model: quentinz/bge-base-zh-v1.5:latest

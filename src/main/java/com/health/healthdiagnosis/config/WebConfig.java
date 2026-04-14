@@ -7,6 +7,7 @@ package com.health.healthdiagnosis.config;
 
 import com.health.healthdiagnosis.interceptor.AdminInterceptor;
 import com.health.healthdiagnosis.interceptor.AuthInterceptor;
+import com.health.healthdiagnosis.interceptor.KnowledgeInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
     private final AdminInterceptor adminInterceptor;
+    private final KnowledgeInterceptor knowledgeInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
@@ -38,6 +40,11 @@ public class WebConfig implements WebMvcConfigurer {
         // 2. 管理员拦截器：校验 role == ADMIN（依赖 AuthInterceptor 先注入 role）
         registry.addInterceptor(adminInterceptor)
                 .addPathPatterns("/api/admin/**")
+                .order(2);
+
+        // 3. 知识库拦截器：校验 role IN (KNOWLEDGE_ENGINEER, ADMIN)
+        registry.addInterceptor(knowledgeInterceptor)
+                .addPathPatterns("/api/knowledge/**")
                 .order(2);
     }
 

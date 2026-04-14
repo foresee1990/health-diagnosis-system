@@ -181,6 +181,21 @@ public class AdminServiceImpl implements AdminService {
         return result;
     }
 
+    @Override
+    public void assignRole(Long operatorId, Long targetUserId, String role) {
+        if ("ADMIN".equals(role)) {
+            throw new BusinessException(ErrorCode.CANNOT_ASSIGN_ADMIN_ROLE, "不允许通过接口分配管理员角色");
+        }
+        if (!java.util.Set.of("USER", "KNOWLEDGE_ENGINEER").contains(role)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "无效的角色值");
+        }
+        User target = getAndValidateTarget(targetUserId, operatorId);
+        target.setRole(role);
+        userMapper.updateById(target);
+        saveLog(operatorId, "ASSIGN_ROLE", targetUserId, "{\"role\":\"" + role + "\"}");
+        log.info("管理员分配角色：operatorId={}, targetUserId={}, role={}", operatorId, targetUserId, role);
+    }
+
     // ==================== 私有工具方法 ====================
 
     /**

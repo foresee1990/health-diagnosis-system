@@ -62,3 +62,5 @@ jwt:
 app:
   report:
     base-dir: ./reports/   # PDF 文件存储根目录（相对于启动目录）
+  knowledge:
+    upload-dir: ./knowledge-uploads/   # 知识库上传 PDF 存储目录

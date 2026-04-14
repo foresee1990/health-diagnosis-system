@@ -97,4 +97,14 @@ public final class ErrorCode {
      * 不允许操作管理员账号
      */
     public static final int CANNOT_OPERATE_ADMIN = 1010;
+
+    /**
+     * 知识库文档不存在
+     */
+    public static final int DOCUMENT_NOT_FOUND = 1011;
+
+    /**
+     * 不允许分配管理员角色
+     */
+    public static final int CANNOT_ASSIGN_ADMIN_ROLE = 1012;
 }

@@ -840,27 +840,27 @@ Authorization: Bearer {token}
 
 ## 接口汇总
 
-| 方法 | 路径 | 说明 | 需要认证 | 需要角色 |
-|------|------|------|----------|----------|
-| POST | /api/auth/register | 用户注册 | 否 | - |
-| POST | /api/auth/login | 用户登录 | 否 | - |
-| GET | /api/users/me | 获取当前用户信息 | 是 | USER/ADMIN |
-| PUT | /api/users/me/password | 修改密码 | 是 | USER/ADMIN |
-| PUT | /api/users/me/profile | 更新个人信息 | 是 | USER/ADMIN |
-| GET | /api/users/me/health-profile | 获取健康档案 | 是 | USER/ADMIN |
-| PUT | /api/users/me/health-profile | 创建/更新健康档案 | 是 | USER/ADMIN |
-| POST | /api/consultations | 创建问诊会话 | 是 | USER |
-| GET | /api/consultations | 获取问诊列表 | 是 | USER |
-| POST | /api/consultations/{id}/messages | 发送消息（同步） | 是 | USER |
+| 方法 | 路径                                     | 说明 | 需要认证 | 需要角色 |
+|------|----------------------------------------|------|----------|----------|
+| POST | /api/auth/register                     | 用户注册 | 否 | - |
+| POST | /api/auth/login                        | 用户登录 | 否 | - |
+| GET | /api/users/me                          | 获取当前用户信息 | 是 | USER/ADMIN |
+| PUT | /api/users/me/password                 | 修改密码 | 是 | USER/ADMIN |
+| PUT | /api/users/me/profile                  | 更新个人信息 | 是 | USER/ADMIN |
+| GET | /api/users/me/health-profile           | 获取健康档案 | 是 | USER/ADMIN |
+| PUT | /api/users/me/health-profile           | 创建/更新健康档案 | 是 | USER/ADMIN |
+| POST | /api/consultations                     | 创建问诊会话 | 是 | USER |
+| GET | /api/consultations                     | 获取问诊列表 | 是 | USER |
+| POST | /api/consultations/{id}/messages       | 发送消息（同步） | 是 | USER |
 | POST | /api/consultations/{id}/messages/stream | 发送消息（SSE流式） | 是 | USER |
-| GET | /api/consultations/{id}/messages | 获取会话消息历史 | 是 | USER |
-| PATCH | /api/consultations/{id}/status | 结束问诊 | 是 | USER |
-| POST | /api/consultations/{id}/report | 生成报告 | 是 | USER |
-| GET | /api/consultations/{id}/report | 查询报告信息 | 是 | USER |
-| GET | /api/reports/{reportId}/file | 下载报告文件 | 是 | USER |
-| GET | /api/admin/users | 用户列表（脱敏） | 是 | ADMIN |
-| PATCH | /api/admin/users/{id}/ban | 禁用用户 | 是 | ADMIN |
-| PATCH | /api/admin/users/{id}/unban | 启用用户 | 是 | ADMIN |
-| POST | /api/admin/users/{id}/password/reset | 重置用户密码 | 是 | ADMIN |
-| GET | /api/admin/users/{id}/consultations | 查看用户会话元数据 | 是 | ADMIN |
-| GET | /api/admin/logs | 系统操作日志 | 是 | ADMIN |
+| GET | /api/consultations/{id}/messages       | 获取会话消息历史 | 是 | USER |
+| PATCH | /api/consultations/{id}/status         | 结束问诊 | 是 | USER |
+| POST | /api/consultations/{id}/report         | 生成报告 | 是 | USER |
+| GET | /api/consultations/{id}/report         | 查询报告信息 | 是 | USER |
+| GET | /api/reports/{reportId}/file           | 下载报告文件 | 是 | USER |
+| GET | /api/admin/users                       | 用户列表（脱敏） | 是 | ADMIN |
+| PATCH | /api/admin/users/{id}/ban              | 禁用用户 | 是 | ADMIN |
+| PATCH | /api/admin/users/{id}/unban            | 启用用户 | 是 | ADMIN |
+| POST | /api/admin/users/{id}/password/reset   | 重置用户密码 | 是 | ADMIN |
+| GET | /api/admin/users/{id}/consultations    | 查看用户会话元数据 | 是 | ADMIN |
+| GET | /api/admin/logs                        | 系统操作日志 | 是 | ADMIN |

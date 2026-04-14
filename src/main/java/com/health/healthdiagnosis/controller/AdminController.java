@@ -1,9 +1,11 @@
 package com.health.healthdiagnosis.controller;
 
 import com.health.healthdiagnosis.common.Result;
+import com.health.healthdiagnosis.dto.request.AssignRoleRequest;
 import com.health.healthdiagnosis.dto.response.AdminConsultationSummary;
 import com.health.healthdiagnosis.service.AdminService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -69,6 +71,19 @@ public class AdminController {
     @GetMapping("/users/{userId}/consultations")
     public Result<List<AdminConsultationSummary>> getUserConsultations(@PathVariable Long userId) {
         return Result.success("获取成功", adminService.getUserConsultations(userId));
+    }
+
+    /**
+     * 分配用户角色（USER / KNOWLEDGE_ENGINEER）
+     */
+    @PatchMapping("/users/{userId}/role")
+    public Result<?> assignRole(
+            @PathVariable Long userId,
+            @Valid @RequestBody AssignRoleRequest request,
+            HttpServletRequest httpRequest) {
+        Long operatorId = (Long) httpRequest.getAttribute("userId");
+        adminService.assignRole(operatorId, userId, request.getRole());
+        return Result.success("角色分配成功", null);
     }
 
     /**

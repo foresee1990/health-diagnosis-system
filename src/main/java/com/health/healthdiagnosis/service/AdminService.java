@@ -26,4 +26,7 @@ public interface AdminService {
 
     /** 分页查询系统操作日志 */
     Map<String, Object> listLogs(int page, int size, Long operatorId);
+
+    /** 分配用户角色（不允许分配 ADMIN） */
+    void assignRole(Long operatorId, Long targetUserId, String role);
 }

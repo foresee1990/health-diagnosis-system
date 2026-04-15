@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -104,9 +105,41 @@ public class ReportService {
         return toVO(report);
     }
 
+    /**
+     * 加载中文字体（嵌入式 TrueType，避免非嵌入 CJK 字体在部分阅读器中渲染出虚线）。
+     * 优先级：classpath fonts/NotoSansSC-Regular.ttf → Windows 系统字体 → STSong-Light 兜底
+     */
+    private PdfFont loadChineseFont() throws IOException {
+        // 1. 优先读取 classpath 字体（放 src/main/resources/fonts/NotoSansSC-Regular.ttf）
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("fonts/NotoSansSC-Regular.ttf")) {
+            if (is != null) {
+                byte[] bytes = is.readAllBytes();
+                return PdfFontFactory.createFont(bytes, PdfEncodings.IDENTITY_H,
+                        PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
+            }
+        }
+        // 2. 回退：Windows 系统中文字体（黑体 / 宋体 / 雅黑，按顺序尝试）
+        String[] candidates = {
+            "C:/Windows/Fonts/simhei.ttf",
+            "C:/Windows/Fonts/simsun.ttc,0",
+            "C:/Windows/Fonts/msyh.ttc,0"
+        };
+        for (String path : candidates) {
+            File fontFile = new File(path.contains(",") ? path.substring(0, path.indexOf(',')) : path);
+            if (fontFile.exists()) {
+                log.info("使用系统字体：{}", path);
+                return PdfFontFactory.createFont(path, PdfEncodings.IDENTITY_H,
+                        PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
+            }
+        }
+        // 3. 最终兜底（可能在某些阅读器中出现渲染问题）
+        log.warn("未找到嵌入式中文字体，回退到 STSong-Light");
+        return PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H");
+    }
+
     private void generatePdf(File pdfFile, Consultation consultation, User user,
                               List<Message> messages) throws IOException {
-        PdfFont font = PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H");
+        PdfFont font = loadChineseFont();
 
         try (PdfDocument pdf = new PdfDocument(new PdfWriter(pdfFile));
              Document doc = new Document(pdf)) {

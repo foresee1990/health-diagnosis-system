@@ -257,79 +257,17 @@ public class ConsultationServiceImpl implements ConsultationService {
         userMessage.setCreatedAt(LocalDateTime.now());
         messageMapper.insert(userMessage);
 
-        // 3. 流式 RAG，解析 <think>...</think> 标签，发送分类 SSE 事件
+        // 3. 流式 RAG（ChatMemory 由 Advisor 自动维护）
         String patientContext = healthProfileService.buildPatientContext(userId);
-
-        boolean[] inThink = {false};
-        StringBuilder thinkBuf = new StringBuilder();
         StringBuilder answerBuf = new StringBuilder();
-        StringBuilder pending = new StringBuilder(); // 用于检测跨 token 的标签
 
         return ragService.chatStream(consultationId, content, patientContext)
-                .handle((String token, SynchronousSink<ServerSentEvent<String>> sink) -> {
-                    pending.append(token);
-                    // 逐步消费 pending，直到无法继续处理为止
-                    while (true) {
-                        String buf = pending.toString();
-                        if (!inThink[0]) {
-                            int openIdx = buf.indexOf("<think>");
-                            if (openIdx >= 0) {
-                                // <think> 前的内容作为 answer 输出
-                                if (openIdx > 0) {
-                                    String before = buf.substring(0, openIdx);
-                                    answerBuf.append(before);
-                                    sink.next(sseEvent("answer", before));
-                                }
-                                pending.delete(0, openIdx + 7);
-                                inThink[0] = true;
-                            } else {
-                                // 尾部保留 6 个字符防止标签被截断
-                                int safe = buf.length() - 6;
-                                if (safe > 0) {
-                                    String out = buf.substring(0, safe);
-                                    answerBuf.append(out);
-                                    sink.next(sseEvent("answer", out));
-                                    pending.delete(0, safe);
-                                }
-                                break;
-                            }
-                        } else {
-                            int closeIdx = buf.indexOf("</think>");
-                            if (closeIdx >= 0) {
-                                if (closeIdx > 0) {
-                                    String thinking = buf.substring(0, closeIdx);
-                                    thinkBuf.append(thinking);
-                                    sink.next(sseEvent("thinking", thinking));
-                                }
-                                pending.delete(0, closeIdx + 8);
-                                inThink[0] = false;
-                                // 通知前端 thinking 结束，触发自动折叠
-                                sink.next(ServerSentEvent.<String>builder()
-                                        .data("{\"type\":\"thinkDone\"}").build());
-                            } else {
-                                int safe = buf.length() - 7;
-                                if (safe > 0) {
-                                    String out = buf.substring(0, safe);
-                                    thinkBuf.append(out);
-                                    sink.next(sseEvent("thinking", out));
-                                    pending.delete(0, safe);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                })
+                .doOnNext(token -> answerBuf.append(token))
+                .map(token -> ServerSentEvent.<String>builder()
+                        .data(sseAnswerPayload(token)).build())
                 .concatWith(Flux.defer(() -> {
-                    // 4. 流结束：清理剩余 pending
-                    String remaining = pending.toString().replaceAll("</?think>?", "").trim();
-                    if (!remaining.isEmpty()) {
-                        if (inThink[0]) thinkBuf.append(remaining);
-                        else answerBuf.append(remaining);
-                    }
-
                     String fullAnswer = answerBuf.toString();
 
-                    // 存入 messages 表（只存 answer）
                     Message assistantMessage = new Message();
                     assistantMessage.setConsultationId(consultationId);
                     assistantMessage.setRole("assistant");
@@ -350,16 +288,15 @@ public class ConsultationServiceImpl implements ConsultationService {
                 }));
     }
 
-    /** 构造带类型的 SSE 事件，对 token 内容做 JSON 转义 */
-    private static ServerSentEvent<String> sseEvent(String type, String token) {
+    /** 构造 answer 类型的 SSE payload，对 token 内容做 JSON 转义 */
+    private static String sseAnswerPayload(String token) {
         String escaped = token
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
-        String payload = "{\"type\":\"" + type + "\",\"token\":\"" + escaped + "\"}";
-        return ServerSentEvent.<String>builder().data(payload).build();
+        return "{\"type\":\"answer\",\"token\":\"" + escaped + "\"}";
     }
 
     private String parseRiskLevel(String reply) {

@@ -20,9 +20,9 @@ spring:
       chat:
         options:
           model: qwen3:4b
-          temperature: 0.7
+          temperature: 0.4
           num-ctx: 4096
-          think: false        # 关闭 qwen3 thinking 模式，不输出 <think> 内容
+          think: false        # 关闭 qwen3 原生 thinking 模式，思考由 prompt 指令控制
       embedding:
         options:
           model: quentinz/bge-base-zh-v1.5:latest

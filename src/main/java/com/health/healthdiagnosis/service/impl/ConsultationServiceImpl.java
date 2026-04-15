@@ -22,6 +22,7 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.SynchronousSink;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -239,17 +240,16 @@ public class ConsultationServiceImpl implements ConsultationService {
     public Flux<ServerSentEvent<String>> sendMessageStream(Long consultationId,
                                                            Long userId,
                                                            String content) {
-        // 1. 权限 & 状态校验（同步）
+        // 1. 权限 & 状态校验
         Consultation consultation = consultationMapper.selectById(consultationId);
         if (consultation == null || !consultation.getUserId().equals(userId)) {
             throw new BusinessException(ACCESS_DENIED, "ACCESS_DENIED");
         }
         if (!"ongoing".equals(consultation.getStatus())) {
-            throw new BusinessException(CONSULTATION_ALREADY_COMPLETED,
-                    "CONSULTATION_ALREADY_COMPLETED");
+            throw new BusinessException(CONSULTATION_ALREADY_COMPLETED, "CONSULTATION_ALREADY_COMPLETED");
         }
 
-        // 2. 写入 user 消息到 ChatHistory（messages 表）
+        // 2. 写入 user 消息
         Message userMessage = new Message();
         userMessage.setConsultationId(consultationId);
         userMessage.setRole("user");
@@ -257,36 +257,109 @@ public class ConsultationServiceImpl implements ConsultationService {
         userMessage.setCreatedAt(LocalDateTime.now());
         messageMapper.insert(userMessage);
 
-        // 3. 流式 RAG（ChatMemory 由 Advisor 自动维护）
+        // 3. 流式 RAG，解析 <think>...</think> 标签，发送分类 SSE 事件
         String patientContext = healthProfileService.buildPatientContext(userId);
-        AtomicReference<StringBuilder> buffer = new AtomicReference<>(new StringBuilder());
+
+        boolean[] inThink = {false};
+        StringBuilder thinkBuf = new StringBuilder();
+        StringBuilder answerBuf = new StringBuilder();
+        StringBuilder pending = new StringBuilder(); // 用于检测跨 token 的标签
 
         return ragService.chatStream(consultationId, content, patientContext)
-                .doOnNext(token -> buffer.get().append(token))
-                .map(token -> ServerSentEvent.<String>builder().data(token).build())
+                .handle((String token, SynchronousSink<ServerSentEvent<String>> sink) -> {
+                    pending.append(token);
+                    // 逐步消费 pending，直到无法继续处理为止
+                    while (true) {
+                        String buf = pending.toString();
+                        if (!inThink[0]) {
+                            int openIdx = buf.indexOf("<think>");
+                            if (openIdx >= 0) {
+                                // <think> 前的内容作为 answer 输出
+                                if (openIdx > 0) {
+                                    String before = buf.substring(0, openIdx);
+                                    answerBuf.append(before);
+                                    sink.next(sseEvent("answer", before));
+                                }
+                                pending.delete(0, openIdx + 7);
+                                inThink[0] = true;
+                            } else {
+                                // 尾部保留 6 个字符防止标签被截断
+                                int safe = buf.length() - 6;
+                                if (safe > 0) {
+                                    String out = buf.substring(0, safe);
+                                    answerBuf.append(out);
+                                    sink.next(sseEvent("answer", out));
+                                    pending.delete(0, safe);
+                                }
+                                break;
+                            }
+                        } else {
+                            int closeIdx = buf.indexOf("</think>");
+                            if (closeIdx >= 0) {
+                                if (closeIdx > 0) {
+                                    String thinking = buf.substring(0, closeIdx);
+                                    thinkBuf.append(thinking);
+                                    sink.next(sseEvent("thinking", thinking));
+                                }
+                                pending.delete(0, closeIdx + 8);
+                                inThink[0] = false;
+                                // 通知前端 thinking 结束，触发自动折叠
+                                sink.next(ServerSentEvent.<String>builder()
+                                        .data("{\"type\":\"thinkDone\"}").build());
+                            } else {
+                                int safe = buf.length() - 7;
+                                if (safe > 0) {
+                                    String out = buf.substring(0, safe);
+                                    thinkBuf.append(out);
+                                    sink.next(sseEvent("thinking", out));
+                                    pending.delete(0, safe);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                })
                 .concatWith(Flux.defer(() -> {
-                    // 4. 流结束后：写入 assistant 消息到 ChatHistory，更新风险等级
-                    String fullReply = buffer.get().toString();
+                    // 4. 流结束：清理剩余 pending
+                    String remaining = pending.toString().replaceAll("</?think>?", "").trim();
+                    if (!remaining.isEmpty()) {
+                        if (inThink[0]) thinkBuf.append(remaining);
+                        else answerBuf.append(remaining);
+                    }
 
+                    String fullAnswer = answerBuf.toString();
+
+                    // 存入 messages 表（只存 answer）
                     Message assistantMessage = new Message();
                     assistantMessage.setConsultationId(consultationId);
                     assistantMessage.setRole("assistant");
-                    assistantMessage.setContent(fullReply);
+                    assistantMessage.setContent(fullAnswer);
                     assistantMessage.setCreatedAt(LocalDateTime.now());
                     messageMapper.insert(assistantMessage);
 
-                    String riskLevel = parseRiskLevel(fullReply);
+                    String riskLevel = parseRiskLevel(fullAnswer);
                     if (riskLevel != null) {
                         consultation.setRiskLevel(riskLevel);
                         consultationMapper.updateById(consultation);
                     }
-                    log.info("流式回复完成, consultationId={}, 风险等级={}", consultationId,
-                            riskLevel);
+                    log.info("流式回复完成, consultationId={}, 风险等级={}", consultationId, riskLevel);
 
                     String donePayload = "{\"type\":\"done\",\"riskLevel\":\""
                             + (riskLevel != null ? riskLevel : "") + "\"}";
                     return Flux.just(ServerSentEvent.<String>builder().data(donePayload).build());
                 }));
+    }
+
+    /** 构造带类型的 SSE 事件，对 token 内容做 JSON 转义 */
+    private static ServerSentEvent<String> sseEvent(String type, String token) {
+        String escaped = token
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+        String payload = "{\"type\":\"" + type + "\",\"token\":\"" + escaped + "\"}";
+        return ServerSentEvent.<String>builder().data(payload).build();
     }
 
     private String parseRiskLevel(String reply) {

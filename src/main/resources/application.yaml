@@ -13,24 +13,23 @@ spring:
       minimum-idle: 5
       connection-timeout: 30000
 
-  # Spring AI 配置
+  # Spring AI 配置（百炼云 API，兼容 OpenAI 协议）
   ai:
-    ollama:
-      base-url: http://localhost:11434
+    openai:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: ${DASHSCOPE_API_KEY}
       chat:
         options:
-          model: qwen3:4b
+          model: qwen3-8b      # 支持 <think> 思维链输出
           temperature: 0.4
-          num-ctx: 4096
-          think: false        # Spring AI M6 不支持 Ollama thinking 字段，保持关闭
       embedding:
         options:
-          model: quentinz/bge-base-zh-v1.5:latest
+          model: text-embedding-v2
     vectorstore:
       pgvector:
         index-type: HNSW
         distance-type: COSINE_DISTANCE
-        dimensions: 768
+        dimensions: 1536
         initialize-schema: true   # 启动时自动创建 vector_store 表
   # 文件上传限制（必须与上方 spring: 合并，不能另起 spring: 根键）
   servlet:
@@ -50,7 +49,7 @@ mybatis-plus:
 server:
   port: 8080
   tomcat:
-    connection-timeout: 60s   # 为本地 Ollama AI 接口预留足够响应时间
+    connection-timeout: 30s
 
 # JWT 配置（secret 至少 32 字符）
 jwt:

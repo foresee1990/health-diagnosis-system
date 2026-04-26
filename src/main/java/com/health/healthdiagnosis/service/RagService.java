@@ -50,7 +50,7 @@ public class RagService {
                                         .similarityThreshold(0.55)
                                         .build())
                 )
-                .user(userInput)
+                .user("/think\n" + userInput)
                 .call()
                 .content();
     }
@@ -77,7 +77,7 @@ public class RagService {
                                         .similarityThreshold(0.55)
                                         .build())
                 )
-                .user(userInput)
+                .user("/think\n" + userInput)
                 .stream()
                 .content();
     }

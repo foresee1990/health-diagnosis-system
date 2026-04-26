@@ -46,17 +46,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private static final Pattern RISK_LEVEL_PATTERN =
             Pattern.compile("风险等级[：:＝=]?\\s*(low|medium|high|urgent)", Pattern.CASE_INSENSITIVE);
 
-    private static final String WELCOME_MESSAGE = """
-            您好！我是 AI 辅助问诊助手，我会根据医学知识库为您提供参考建议。
-
-            为了给您更准确的回复，请尽量描述：
-            - **主要症状**（如头痛、发烧、咳嗽等）
-            - **持续时间**（几小时/几天）
-            - **严重程度**（轻微/明显/剧烈）
-            - **伴随症状**（如有）
-
-            请注意：本系统仅供参考，不能替代专业医生诊断，如症状严重请及时就医。
-            """;
+    private static final String DEFAULT_TITLE = "新建问诊";
 
     private final ConsultationMapper consultationMapper;
     private final MessageMapper messageMapper;
@@ -67,37 +57,16 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ConsultationResponse createConsultation(Long userId, CreateConsultationRequest request) {
-        // 1. 创建问诊会话记录
         Consultation consultation = new Consultation();
         consultation.setUserId(userId);
-        consultation.setStatus("ongoing"); // 初始状态
-        consultation.setChiefComplaint(request.getChiefComplaint());
+        consultation.setStatus("ongoing");
+        String title = (request.getChiefComplaint() == null || request.getChiefComplaint().isBlank())
+                ? DEFAULT_TITLE : request.getChiefComplaint();
+        consultation.setChiefComplaint(title);
         consultation.setCreatedAt(LocalDateTime.now());
-        // 如果有 updatedAt 字段也可以在此设置
 
-        // 插入数据库，获取自增 ID (假设 MP 配置了回填 ID)
         consultationMapper.insert(consultation);
-        Long consultationId = consultation.getId();
-
-        // 2. 业务规则：自动将主诉作为第一条 user 消息写入 messages 表
-        Message firstMessage = new Message();
-        firstMessage.setConsultationId(consultationId);
-        firstMessage.setRole("user");
-        firstMessage.setContent(request.getChiefComplaint());
-        firstMessage.setCreatedAt(LocalDateTime.now());
-
-        messageMapper.insert(firstMessage);
-
-        // 3. 插入固定引导消息（assistant 角色），引导用户描述症状
-        Message welcomeMessage = new Message();
-        welcomeMessage.setConsultationId(consultationId);
-        welcomeMessage.setRole("assistant");
-        welcomeMessage.setContent(WELCOME_MESSAGE);
-        welcomeMessage.setCreatedAt(LocalDateTime.now());
-        messageMapper.insert(welcomeMessage);
-
-        log.info("会话创建成功, consultationId={}", consultationId);
-        // 4. 返回响应
+        log.info("会话创建成功, consultationId={}", consultation.getId());
         return ConsultationResponse.fromEntity(consultation);
     }
 
@@ -116,6 +85,13 @@ public class ConsultationServiceImpl implements ConsultationService {
         //TODO:不要hardcode
         if (!"ongoing".equals(consultation.getStatus())) {
             throw new BusinessException(CONSULTATION_ALREADY_COMPLETED,"CONSULTATION_ALREADY_COMPLETED");
+        }
+
+        // 首条消息自动更新会话标题
+        if (DEFAULT_TITLE.equals(consultation.getChiefComplaint())) {
+            String title = content.length() > 30 ? content.substring(0, 30) + "…" : content;
+            consultation.setChiefComplaint(title);
+            consultationMapper.updateById(consultation);
         }
 
         // 保存用户消息
@@ -249,6 +225,13 @@ public class ConsultationServiceImpl implements ConsultationService {
             throw new BusinessException(CONSULTATION_ALREADY_COMPLETED, "CONSULTATION_ALREADY_COMPLETED");
         }
 
+        // 首条消息自动更新会话标题
+        if (DEFAULT_TITLE.equals(consultation.getChiefComplaint())) {
+            String title = content.length() > 30 ? content.substring(0, 30) + "…" : content;
+            consultation.setChiefComplaint(title);
+            consultationMapper.updateById(consultation);
+        }
+
         // 2. 写入 user 消息
         Message userMessage = new Message();
         userMessage.setConsultationId(consultationId);
@@ -366,6 +349,34 @@ public class ConsultationServiceImpl implements ConsultationService {
         item.setCreatedAt(c.getCreatedAt());
         item.setCompletedAt(c.getCompletedAt());
         return item;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteConsultation(Long consultationId, Long userId) {
+        Consultation consultation = consultationMapper.selectById(consultationId);
+        if (consultation == null || !consultation.getUserId().equals(userId)) {
+            throw new BusinessException(ACCESS_DENIED, "ACCESS_DENIED");
+        }
+        messageMapper.delete(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Message>()
+                        .eq(Message::getConsultationId, consultationId)
+        );
+        consultationMapper.deleteById(consultationId);
+        log.info("会话已删除, consultationId={}", consultationId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ConsultationItemResponse renameConsultation(Long consultationId, Long userId, String title) {
+        Consultation consultation = consultationMapper.selectById(consultationId);
+        if (consultation == null || !consultation.getUserId().equals(userId)) {
+            throw new BusinessException(ACCESS_DENIED, "ACCESS_DENIED");
+        }
+        consultation.setChiefComplaint(title.isBlank() ? DEFAULT_TITLE : title);
+        consultationMapper.updateById(consultation);
+        log.info("会话已重命名, consultationId={}, title={}", consultationId, title);
+        return convertToItem(consultation);
     }
 
     private record MessageSegments(String thinking, String answer) {

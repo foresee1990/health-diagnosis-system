@@ -41,10 +41,11 @@ public interface ConsultationService {
      */
     ConsultationPageResponse getConsultationList(Long userId, int page, int size);
 
-    /*
-     *结束会话
-     */
     ConsultationItemResponse completeConsultation(Long consultationId, Long userId);
+
+    void deleteConsultation(Long consultationId, Long userId);
+
+    ConsultationItemResponse renameConsultation(Long consultationId, Long userId, String title);
 
     /**
      * 发送消息（SSE 流式）

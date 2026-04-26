@@ -12,11 +12,14 @@ import com.health.healthdiagnosis.mapper.MessageMapper;
 import com.health.healthdiagnosis.mapper.ReportMapper;
 import com.health.healthdiagnosis.mapper.UserMapper;
 import com.itextpdf.io.font.PdfEncodings;
+import com.itextpdf.kernel.colors.DeviceRgb;
 import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.kernel.font.PdfFontFactory;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.kernel.pdf.canvas.draw.SolidLine;
 import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.LineSeparator;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Text;
 import com.itextpdf.layout.properties.TextAlignment;
@@ -137,75 +140,73 @@ public class ReportService {
         return PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H");
     }
 
+    // 风险等级颜色
+    private static final DeviceRgb COLOR_LOW    = new DeviceRgb(5,   150, 105);
+    private static final DeviceRgb COLOR_MEDIUM = new DeviceRgb(217, 119,   6);
+    private static final DeviceRgb COLOR_HIGH   = new DeviceRgb(220,  38,  38);
+    private static final DeviceRgb COLOR_URGENT = new DeviceRgb(153,  27,  27);
+    private static final DeviceRgb COLOR_GRAY   = new DeviceRgb(107, 114, 128);
+    private static final DeviceRgb COLOR_PRIMARY = new DeviceRgb(47, 128, 237);
+    private static final DeviceRgb COLOR_AI_BG  = new DeviceRgb(235, 244, 255);
+
     private void generatePdf(File pdfFile, Consultation consultation, User user,
                               List<Message> messages) throws IOException {
         PdfFont font = loadChineseFont();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
         try (PdfDocument pdf = new PdfDocument(new PdfWriter(pdfFile));
              Document doc = new Document(pdf)) {
 
-            doc.setFont(font);
+            doc.setFont(font).setMargins(48, 48, 48, 48);
 
-            // 标题
-            doc.add(new Paragraph("健康问诊报告")
-                    .setFontSize(20)
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setBold());
+            // ── 标题区 ──────────────────────────────────────────
+            doc.add(new Paragraph("健康问诊综合评估报告")
+                    .setFontSize(22).setBold()
+                    .setFontColor(COLOR_PRIMARY)
+                    .setTextAlignment(TextAlignment.CENTER));
+            doc.add(new Paragraph("AI-Assisted Health Consultation Report")
+                    .setFontSize(10).setFontColor(COLOR_GRAY)
+                    .setTextAlignment(TextAlignment.CENTER));
+            doc.add(new Paragraph(" ").setFontSize(4));
+            doc.add(new LineSeparator(new SolidLine(1f)));
+            doc.add(new Paragraph(" ").setFontSize(6));
 
-            doc.add(new Paragraph(" "));
-
-            // 报告编号
-            doc.add(new Paragraph("报告编号：R" + consultation.getId()).setFontSize(12));
-
-            // 用户信息
-            doc.add(new Paragraph("用户：" + user.getUsername()).setFontSize(12));
-
-            // 问诊时间
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            doc.add(new Paragraph("问诊时间：" + consultation.getCreatedAt().format(fmt))
-                    .setFontSize(12));
+            // ── 基本信息 ────────────────────────────────────────
+            addSectionTitle(doc, "基本信息");
+            doc.add(new Paragraph("报告编号：R-" + String.format("%06d", consultation.getId()))
+                    .setFontSize(11));
+            doc.add(new Paragraph("患者账号：" + user.getUsername()).setFontSize(11));
+            doc.add(new Paragraph("问诊开始：" + consultation.getCreatedAt().format(fmt))
+                    .setFontSize(11));
             if (consultation.getCompletedAt() != null) {
-                doc.add(new Paragraph("结束时间：" + consultation.getCompletedAt().format(fmt))
-                        .setFontSize(12));
+                doc.add(new Paragraph("问诊结束：" + consultation.getCompletedAt().format(fmt))
+                        .setFontSize(11));
             }
+            doc.add(new Paragraph("报告生成：" + LocalDateTime.now().format(fmt)).setFontSize(11));
+            doc.add(new Paragraph(" ").setFontSize(6));
 
-            doc.add(new Paragraph(" "));
+            // ── 主诉 ────────────────────────────────────────────
+            addSectionTitle(doc, "主诉");
+            String chiefComplaint = consultation.getChiefComplaint();
+            doc.add(new Paragraph(chiefComplaint != null && !chiefComplaint.isBlank()
+                    ? chiefComplaint : "（未填写）").setFontSize(12));
+            doc.add(new Paragraph(" ").setFontSize(6));
 
-            // 主诉
-            doc.add(new Paragraph("【主诉】").setFontSize(14).setBold());
-            doc.add(new Paragraph(consultation.getChiefComplaint() != null
-                    ? consultation.getChiefComplaint() : "无").setFontSize(12));
-
-            doc.add(new Paragraph(" "));
-
-            // 症状补充（用户在主诉之后补充的信息）
-            doc.add(new Paragraph("【症状补充】").setFontSize(14).setBold());
-            List<String> supplements = messages.stream()
-                    .filter(m -> "user".equals(m.getRole()))
-                    .skip(1)  // 跳过第一条（即主诉，已在上方展示）
-                    .map(Message::getContent)
-                    .toList();
-            if (supplements.isEmpty()) {
-                doc.add(new Paragraph("无补充信息").setFontSize(12));
-            } else {
-                for (String s : supplements) {
-                    doc.add(new Paragraph("• " + s).setFontSize(11));
-                    doc.add(new Paragraph(" ").setFontSize(3));
-                }
-            }
-
-            doc.add(new Paragraph(" "));
-
-            // 风险评估
-            doc.add(new Paragraph("【风险评估】").setFontSize(14).setBold());
+            // ── 风险评估 ────────────────────────────────────────
+            addSectionTitle(doc, "风险评估");
             String risk = consultation.getRiskLevel();
+            DeviceRgb riskColor = riskColor(risk);
             String riskDisplay = risk != null ? translateRisk(risk) : "未评估";
-            doc.add(new Paragraph("风险等级：" + riskDisplay).setFontSize(12));
+            doc.add(new Paragraph()
+                    .add(new Text("风险等级：").setFontSize(12))
+                    .add(new Text("  " + riskDisplay + "  ")
+                            .setFontSize(12).setBold()
+                            .setFontColor(riskColor)));
+            doc.add(new Paragraph(buildAdvice(risk)).setFontSize(11).setFontColor(COLOR_GRAY));
+            doc.add(new Paragraph(" ").setFontSize(6));
 
-            doc.add(new Paragraph(" "));
-
-            // 医学建议（取最后一条 AI 回复，逐行渲染）
-            doc.add(new Paragraph("【医学建议】").setFontSize(14).setBold());
+            // ── 最终诊断建议 ─────────────────────────────────────
+            addSectionTitle(doc, "AI 诊断建议");
             List<String> adviceLines = messages.stream()
                     .filter(m -> "assistant".equals(m.getRole()))
                     .reduce((a, b) -> b)
@@ -218,16 +219,56 @@ public class ReportService {
                     doc.add(new Paragraph(line).setFontSize(11));
                 }
             }
+            doc.add(new Paragraph(" ").setFontSize(6));
 
-            doc.add(new Paragraph(" "));
+            // ── 完整问诊记录 ─────────────────────────────────────
+            addSectionTitle(doc, "完整问诊对话记录");
+            for (Message msg : messages) {
+                if ("user".equals(msg.getRole())) {
+                    doc.add(new Paragraph()
+                            .add(new Text("患  者：").setFontSize(10).setBold().setFontColor(COLOR_GRAY))
+                            .add(new Text(msg.getContent()).setFontSize(11)));
+                } else {
+                    List<String> lines = stripMarkdownLines(msg.getContent());
+                    Paragraph p = new Paragraph()
+                            .add(new Text("AI助手：").setFontSize(10).setBold().setFontColor(COLOR_PRIMARY));
+                    doc.add(p);
+                    for (String line : lines) {
+                        if (!line.isBlank()) {
+                            doc.add(new Paragraph(line).setFontSize(11).setMarginLeft(48));
+                        }
+                    }
+                }
+                doc.add(new Paragraph(" ").setFontSize(3));
+            }
+            doc.add(new Paragraph(" ").setFontSize(6));
 
-            // 免责声明
-            doc.add(new Paragraph("【免责声明】").setFontSize(14).setBold());
+            // ── 免责声明 ────────────────────────────────────────
+            doc.add(new LineSeparator(new SolidLine(0.5f)));
+            doc.add(new Paragraph(" ").setFontSize(4));
             doc.add(new Paragraph(
-                    "本报告内容仅供参考，不构成医疗诊断意见，如有不适请及时就医。")
-                    .setFontSize(11)
-                    .setItalic());
+                    "【免责声明】本报告由 AI 辅助生成，内容仅供参考，不构成医疗诊断意见。" +
+                    "如有不适，请及时前往正规医疗机构就诊，遵从医生建议。")
+                    .setFontSize(9).setFontColor(COLOR_GRAY).setItalic());
         }
+    }
+
+    private void addSectionTitle(Document doc, String title) throws IOException {
+        doc.add(new Paragraph(title)
+                .setFontSize(13).setBold()
+                .setFontColor(COLOR_PRIMARY)
+                .setMarginBottom(4));
+    }
+
+    private DeviceRgb riskColor(String risk) {
+        if (risk == null) return COLOR_GRAY;
+        return switch (risk) {
+            case "low"    -> COLOR_LOW;
+            case "medium" -> COLOR_MEDIUM;
+            case "high"   -> COLOR_HIGH;
+            case "urgent" -> COLOR_URGENT;
+            default       -> COLOR_GRAY;
+        };
     }
 
     /** 将 Markdown 文本转为适合 PDF 纯文本展示的行列表（逐行处理，兼容 \r\n） */

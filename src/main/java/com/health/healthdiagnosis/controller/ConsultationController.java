@@ -121,9 +121,39 @@ public class ConsultationController {
             HttpServletRequest request) {
 
         Long userId = (Long) request.getAttribute("userId");
-
         ConsultationItemResponse data =
                 consultationService.completeConsultation(consultationId, userId);
         return Result.success("问诊已结束", data);
+    }
+
+    /**
+     * 删除问诊会话（含消息）
+     * DELETE /api/consultations/{consultationId}
+     */
+    @DeleteMapping("/{consultationId}")
+    public Result<?> deleteConsultation(
+            @PathVariable Long consultationId,
+            HttpServletRequest request) {
+
+        Long userId = (Long) request.getAttribute("userId");
+        consultationService.deleteConsultation(consultationId, userId);
+        return Result.success("删除成功", null);
+    }
+
+    /**
+     * 重命名会话标题
+     * PATCH /api/consultations/{consultationId}/title
+     */
+    @PatchMapping("/{consultationId}/title")
+    public Result<ConsultationItemResponse> renameConsultation(
+            @PathVariable Long consultationId,
+            @RequestBody java.util.Map<String, String> body,
+            HttpServletRequest request) {
+
+        Long userId = (Long) request.getAttribute("userId");
+        String title = body.getOrDefault("title", "").trim();
+        ConsultationItemResponse data =
+                consultationService.renameConsultation(consultationId, userId, title);
+        return Result.success("重命名成功", data);
     }
 }

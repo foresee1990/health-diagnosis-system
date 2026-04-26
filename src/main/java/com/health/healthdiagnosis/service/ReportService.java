@@ -178,16 +178,20 @@ public class ReportService {
 
             doc.add(new Paragraph(" "));
 
-            // 对话记录
-            doc.add(new Paragraph("【对话记录】").setFontSize(14).setBold());
-            for (Message msg : messages) {
-                String roleLabel = "user".equals(msg.getRole()) ? "患者" : "AI 医生";
-                Paragraph p = new Paragraph();
-                p.add(new Text(roleLabel + "：").setBold());
-                p.add(new Text(msg.getContent()));
-                p.setFontSize(11);
-                doc.add(p);
-                doc.add(new Paragraph(" ").setFontSize(4));
+            // 症状补充（用户在主诉之后补充的信息）
+            doc.add(new Paragraph("【症状补充】").setFontSize(14).setBold());
+            List<String> supplements = messages.stream()
+                    .filter(m -> "user".equals(m.getRole()))
+                    .skip(1)  // 跳过第一条（即主诉，已在上方展示）
+                    .map(Message::getContent)
+                    .toList();
+            if (supplements.isEmpty()) {
+                doc.add(new Paragraph("无补充信息").setFontSize(12));
+            } else {
+                for (String s : supplements) {
+                    doc.add(new Paragraph("• " + s).setFontSize(11));
+                    doc.add(new Paragraph(" ").setFontSize(3));
+                }
             }
 
             doc.add(new Paragraph(" "));
@@ -200,9 +204,20 @@ public class ReportService {
 
             doc.add(new Paragraph(" "));
 
-            // 就医建议
-            doc.add(new Paragraph("【就医建议】").setFontSize(14).setBold());
-            doc.add(new Paragraph(buildAdvice(risk)).setFontSize(12));
+            // 医学建议（取最后一条 AI 回复，逐行渲染）
+            doc.add(new Paragraph("【医学建议】").setFontSize(14).setBold());
+            List<String> adviceLines = messages.stream()
+                    .filter(m -> "assistant".equals(m.getRole()))
+                    .reduce((a, b) -> b)
+                    .map(m -> stripMarkdownLines(m.getContent()))
+                    .orElse(List.of(buildAdvice(risk)));
+            for (String line : adviceLines) {
+                if (line.isBlank()) {
+                    doc.add(new Paragraph(" ").setFontSize(4));
+                } else {
+                    doc.add(new Paragraph(line).setFontSize(11));
+                }
+            }
 
             doc.add(new Paragraph(" "));
 
@@ -213,6 +228,68 @@ public class ReportService {
                     .setFontSize(11)
                     .setItalic());
         }
+    }
+
+    /** 将 Markdown 文本转为适合 PDF 纯文本展示的行列表（逐行处理，兼容 \r\n） */
+    private List<String> stripMarkdownLines(String text) {
+        if (text == null) return List.of();
+
+        // 先去掉 think 块
+        String clean = text.replaceAll("(?is)<think>.*?</think>", "");
+
+        String[] lines = clean.split("\\r?\\n");
+        List<String> result = new java.util.ArrayList<>();
+        boolean inCodeBlock = false;
+
+        for (String raw : lines) {
+            String line = raw.trim();
+
+            // 代码围栏切换
+            if (line.startsWith("```") || line.startsWith("~~~")) {
+                inCodeBlock = !inCodeBlock;
+                continue;
+            }
+            if (inCodeBlock) continue;
+
+            // 水平分隔线
+            if (line.matches("[-*_]{3,}")) continue;
+
+            // 标题行：去掉所有前导 #
+            if (line.startsWith("#")) {
+                line = line.replaceAll("^#{1,6}\\s*", "");
+            }
+
+            // 表格分隔行（|---|）
+            if (line.matches("[\\|\\-:\\s]+")) continue;
+
+            // 表格内容行
+            if (line.startsWith("|")) {
+                String inner = line.replaceAll("^\\|", "").replaceAll("\\|$", "");
+                StringBuilder row = new StringBuilder();
+                for (String cell : inner.split("\\|")) {
+                    String c = cell.trim();
+                    if (!c.isEmpty() && !c.matches("[-:]+")) {
+                        if (!row.isEmpty()) row.append("  ");
+                        row.append(c);
+                    }
+                }
+                line = row.toString();
+                if (line.isEmpty()) continue;
+            }
+
+            // 无序列表 → •
+            if (line.matches("^[-*]\\s+.*")) {
+                line = "• " + line.replaceAll("^[-*]\\s+", "");
+            }
+
+            // 去除加粗 / 斜体 / 行内代码 / 残留 |
+            line = line.replaceAll("\\*{1,3}(.+?)\\*{1,3}", "$1")
+                       .replaceAll("`([^`]+)`", "$1")
+                       .replace("|", "  ");
+
+            result.add(line);
+        }
+        return result;
     }
 
     private String translateRisk(String risk) {

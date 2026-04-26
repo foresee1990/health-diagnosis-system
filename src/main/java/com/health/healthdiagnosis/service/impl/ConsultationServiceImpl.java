@@ -25,8 +25,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.SynchronousSink;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,6 +37,11 @@ import static com.health.healthdiagnosis.common.ErrorCode.CONSULTATION_ALREADY_C
 @Service
 @RequiredArgsConstructor
 public class ConsultationServiceImpl implements ConsultationService {
+
+    private static final String THINK_OPEN_TAG = "<think>";
+    private static final String THINK_CLOSE_TAG = "</think>";
+    private static final Pattern THINK_BLOCK_PATTERN =
+            Pattern.compile("<think>([\\s\\S]*?)</think>", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern RISK_LEVEL_PATTERN =
             Pattern.compile("风险等级[：:＝=]?\\s*(low|medium|high|urgent)", Pattern.CASE_INSENSITIVE);
@@ -143,8 +148,8 @@ public class ConsultationServiceImpl implements ConsultationService {
         messageMapper.insert(assistantMessage);
 
         return new SendMessageResponse(
-                MessageResponse.fromEntity(userMessage),
-                MessageResponse.fromEntity(assistantMessage)
+                toMessageResponse(userMessage),
+                toMessageResponse(assistantMessage)
         );
     }
 
@@ -167,12 +172,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         // 3 转换 DTO
         List<MessageResponse> responses = messageList.stream()
-                .map(m -> new MessageResponse(
-                        m.getId(),
-                        m.getRole(),
-                        m.getContent(),
-                        m.getCreatedAt()
-                ))
+                .map(this::toMessageResponse)
                 .toList();
 
         // 4 构建返回对象
@@ -259,14 +259,15 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         // 3. 流式 RAG（ChatMemory 由 Advisor 自动维护）
         String patientContext = healthProfileService.buildPatientContext(userId);
-        StringBuilder answerBuf = new StringBuilder();
+        StringBuilder rawReplyBuf = new StringBuilder();
+        StreamingThinkParser parser = new StreamingThinkParser();
 
         return ragService.chatStream(consultationId, content, patientContext)
-                .doOnNext(token -> answerBuf.append(token))
-                .map(token -> ServerSentEvent.<String>builder()
-                        .data(sseAnswerPayload(token)).build())
+                .doOnNext(rawReplyBuf::append)
+                .<ServerSentEvent<String>>handle((token, sink) -> parser.consume(token, sink))
                 .concatWith(Flux.defer(() -> {
-                    String fullAnswer = answerBuf.toString();
+                    List<ServerSentEvent<String>> tailEvents = parser.finish();
+                    String fullAnswer = rawReplyBuf.toString();
 
                     Message assistantMessage = new Message();
                     assistantMessage.setConsultationId(consultationId);
@@ -284,7 +285,8 @@ public class ConsultationServiceImpl implements ConsultationService {
 
                     String donePayload = "{\"type\":\"done\",\"riskLevel\":\""
                             + (riskLevel != null ? riskLevel : "") + "\"}";
-                    return Flux.just(ServerSentEvent.<String>builder().data(donePayload).build());
+                    tailEvents.add(ServerSentEvent.<String>builder().data(donePayload).build());
+                    return Flux.fromIterable(tailEvents);
                 }));
     }
 
@@ -297,6 +299,57 @@ public class ConsultationServiceImpl implements ConsultationService {
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
         return "{\"type\":\"answer\",\"token\":\"" + escaped + "\"}";
+    }
+
+    private MessageResponse toMessageResponse(Message message) {
+        MessageSegments segments = splitMessageContent(message.getRole(), message.getContent());
+        return new MessageResponse(
+                message.getId(),
+                message.getRole(),
+                segments.thinking(),
+                segments.answer(),
+                message.getCreatedAt()
+        );
+    }
+
+    private MessageSegments splitMessageContent(String role, String rawContent) {
+        String safeContent = rawContent == null ? "" : rawContent;
+        if (!"assistant".equals(role)) {
+            return new MessageSegments(null, safeContent);
+        }
+
+        Matcher matcher = THINK_BLOCK_PATTERN.matcher(safeContent);
+        StringBuilder thinking = new StringBuilder();
+        StringBuffer answer = new StringBuffer();
+        while (matcher.find()) {
+            String block = matcher.group(1);
+            if (block != null && !block.isBlank()) {
+                if (!thinking.isEmpty()) {
+                    thinking.append("\n\n");
+                }
+                thinking.append(block.trim());
+            }
+            matcher.appendReplacement(answer, "");
+        }
+        matcher.appendTail(answer);
+
+        String answerText = answer.toString().trim();
+        String thinkingText = thinking.isEmpty() ? null : thinking.toString();
+        return new MessageSegments(thinkingText, answerText);
+    }
+
+    private static String sseThinkingPayload(String token) {
+        String escaped = token
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+        return "{\"type\":\"thinking\",\"token\":\"" + escaped + "\"}";
+    }
+
+    private static String sseThinkDonePayload() {
+        return "{\"type\":\"thinkDone\"}";
     }
 
     private String parseRiskLevel(String reply) {
@@ -313,5 +366,118 @@ public class ConsultationServiceImpl implements ConsultationService {
         item.setCreatedAt(c.getCreatedAt());
         item.setCompletedAt(c.getCompletedAt());
         return item;
+    }
+
+    private record MessageSegments(String thinking, String answer) {
+    }
+
+    private static final class StreamChunk {
+        private final String type;
+        private final String token;
+
+        private StreamChunk(String type, String token) {
+            this.type = type;
+            this.token = token;
+        }
+    }
+
+    private static final class StreamingThinkParser {
+        private final StringBuilder markerBuffer = new StringBuilder();
+        private final StringBuilder outputBuffer = new StringBuilder();
+        private boolean inThinking;
+
+        void consume(String token, SynchronousSink<ServerSentEvent<String>> sink) {
+            List<StreamChunk> chunks = parse(token, false);
+            for (StreamChunk chunk : chunks) {
+                if ("thinking".equals(chunk.type)) {
+                    sink.next(ServerSentEvent.<String>builder()
+                            .data(sseThinkingPayload(chunk.token))
+                            .build());
+                } else if ("answer".equals(chunk.type)) {
+                    sink.next(ServerSentEvent.<String>builder()
+                            .data(sseAnswerPayload(chunk.token))
+                            .build());
+                } else if ("thinkDone".equals(chunk.type)) {
+                    sink.next(ServerSentEvent.<String>builder()
+                            .data(sseThinkDonePayload())
+                            .build());
+                }
+            }
+        }
+
+        List<ServerSentEvent<String>> finish() {
+            List<ServerSentEvent<String>> events = new ArrayList<>();
+            List<StreamChunk> chunks = parse("", true);
+            for (StreamChunk chunk : chunks) {
+                if ("thinking".equals(chunk.type)) {
+                    events.add(ServerSentEvent.<String>builder()
+                            .data(sseThinkingPayload(chunk.token))
+                            .build());
+                } else if ("answer".equals(chunk.type)) {
+                    events.add(ServerSentEvent.<String>builder()
+                            .data(sseAnswerPayload(chunk.token))
+                            .build());
+                } else if ("thinkDone".equals(chunk.type)) {
+                    events.add(ServerSentEvent.<String>builder()
+                            .data(sseThinkDonePayload())
+                            .build());
+                }
+            }
+            return events;
+        }
+
+        private List<StreamChunk> parse(String token, boolean endOfStream) {
+            List<StreamChunk> chunks = new ArrayList<>();
+            for (int i = 0; i < token.length(); i++) {
+                markerBuffer.append(token.charAt(i));
+                drainBuffer(chunks);
+            }
+            if (endOfStream) {
+                outputBuffer.append(markerBuffer);
+                markerBuffer.setLength(0);
+            }
+            flushOutput(chunks);
+            return chunks;
+        }
+
+        private void drainBuffer(List<StreamChunk> chunks) {
+            String target = inThinking ? THINK_CLOSE_TAG : THINK_OPEN_TAG;
+            while (!markerBuffer.isEmpty()) {
+                if (markerBuffer.toString().equalsIgnoreCase(target)) {
+                    flushOutput(chunks);
+                    markerBuffer.setLength(0);
+                    if (inThinking) {
+                        chunks.add(new StreamChunk("thinkDone", ""));
+                    }
+                    inThinking = !inThinking;
+                    return;
+                }
+                if (isPrefixIgnoreCase(markerBuffer, target)) {
+                    return;
+                }
+                outputBuffer.append(markerBuffer.charAt(0));
+                markerBuffer.deleteCharAt(0);
+            }
+        }
+
+        private void flushOutput(List<StreamChunk> chunks) {
+            if (outputBuffer.isEmpty()) {
+                return;
+            }
+            chunks.add(new StreamChunk(inThinking ? "thinking" : "answer", outputBuffer.toString()));
+            outputBuffer.setLength(0);
+        }
+
+        private boolean isPrefixIgnoreCase(StringBuilder buffer, String target) {
+            if (buffer.length() > target.length()) {
+                return false;
+            }
+            for (int i = 0; i < buffer.length(); i++) {
+                if (Character.toLowerCase(buffer.charAt(i)) != Character.toLowerCase(target.charAt(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 }

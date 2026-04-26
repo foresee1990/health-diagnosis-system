@@ -22,16 +22,9 @@ public class MessageResponse {
 
     private String role;
 
+    private String thinking;
+
     private String content;
 
     private LocalDateTime createdAt;
-
-    public static MessageResponse fromEntity(Message message) {
-        return new MessageResponse(
-                message.getId(),
-                message.getRole(),
-                message.getContent(),
-                message.getCreatedAt()
-        );
-    }
 }

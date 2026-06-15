@@ -1,0 +1,913 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "默认模块",
+    "description": "",
+    "version": "1.0.0"
+  },
+  "tags": [],
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "summary": "用户注册接口",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest",
+                "description": "注册请求体（带@Valid校验）"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result%3F",
+                  "description": "注册结果"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "用户登录接口",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest",
+                "description": "登录请求体（带参数校验）"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result%3F",
+                  "description": "登录结果（包含token）"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "summary": "获取用户信息接口",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result%3F",
+                  "description": "用户信息结果"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/consultations": {
+      "post": {
+        "summary": "创建问诊会话",
+        "deprecated": false,
+        "description": "POST /api/consultations",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConsultationRequest",
+                "description": ""
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultConsultationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      },
+      "get": {
+        "summary": "获取问诊会话列表",
+        "deprecated": false,
+        "description": "GET /api/consultations",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": 1,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": 10,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultConsultationPageResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/consultations/{consultationId}/messages": {
+      "post": {
+        "summary": "发送消息",
+        "deprecated": false,
+        "description": "POST /api/consultations/{consultationId}/messages",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "consultationId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest",
+                "description": ""
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultSendMessageResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      },
+      "get": {
+        "summary": "getMessages",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "consultationId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultConsultationMessagesResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/consultations/{consultationId}/messages/stream": {
+      "post": {
+        "summary": "发送消息（SSE 流式）",
+        "deprecated": false,
+        "description": "POST /api/consultations/{consultationId}/messages/stream",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "consultationId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest",
+                "description": ""
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServerSentEventString"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/consultations/{consultationId}/status": {
+      "patch": {
+        "summary": "结束问诊会话",
+        "deprecated": false,
+        "description": "PATCH /api/consultations/{consultationId}/status",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "consultationId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultConsultationItemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/consultations/{consultationId}/report": {
+      "post": {
+        "summary": "生成问诊报告",
+        "deprecated": false,
+        "description": "POST /api/consultations/{consultationId}/report",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "consultationId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultReportVO"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      },
+      "get": {
+        "summary": "查询问诊报告信息",
+        "deprecated": false,
+        "description": "GET /api/consultations/{consultationId}/report",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "consultationId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultReportVO"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/reports/{reportId}/file": {
+      "get": {
+        "summary": "下载 PDF 报告文件",
+        "deprecated": false,
+        "description": "GET /api/reports/{reportId}/file",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Result?": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "状态码 (HTTP 状态码或业务状态码)"
+          },
+          "message": {
+            "type": "string",
+            "description": "响应消息"
+          },
+          "data": {
+            "description": "响应数据",
+            "type": "null"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "时间戳 (毫秒)\n默认值：System.currentTimeMillis()",
+            "format": "int64"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "用户名：非空，长度3-50",
+            "minLength": 3,
+            "maxLength": 50
+          },
+          "password": {
+            "type": "string",
+            "description": "密码：非空，长度6-20",
+            "minLength": 6,
+            "maxLength": 20
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱：可选，格式验证",
+            "format": "email"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "用户名"
+          },
+          "password": {
+            "type": "string",
+            "description": "密码"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "ConsultationResponse": {
+        "type": "object",
+        "properties": {
+          "consultationId": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "description": ""
+          },
+          "createdAt": {
+            "type": "string",
+            "description": ""
+          }
+        }
+      },
+      "ReportVO": {
+        "type": "object",
+        "properties": {
+          "reportId": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "downloadUrl": {
+            "type": "string",
+            "description": ""
+          },
+          "fileSize": {
+            "type": "integer",
+            "description": ""
+          },
+          "createdAt": {
+            "type": "string",
+            "description": ""
+          }
+        }
+      },
+      "ResultConsultationResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "状态码 (HTTP 状态码或业务状态码)"
+          },
+          "message": {
+            "type": "string",
+            "description": "响应消息"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConsultationResponse",
+            "description": "响应数据"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "时间戳 (毫秒)\n默认值：System.currentTimeMillis()",
+            "format": "int64"
+          }
+        }
+      },
+      "ResultReportVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "状态码 (HTTP 状态码或业务状态码)"
+          },
+          "message": {
+            "type": "string",
+            "description": "响应消息"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ReportVO",
+            "description": "响应数据"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "时间戳 (毫秒)\n默认值：System.currentTimeMillis()",
+            "format": "int64"
+          }
+        }
+      },
+      "CreateConsultationRequest": {
+        "type": "object",
+        "properties": {
+          "chiefComplaint": {
+            "type": "string",
+            "description": "主诉内容\n规则：不能为空，长度 1~500 字符",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "chiefComplaint"
+        ]
+      },
+      "SendMessageResponse": {
+        "type": "object",
+        "properties": {
+          "userMessage": {
+            "$ref": "#/components/schemas/MessageResponse",
+            "description": ""
+          },
+          "assistantReply": {
+            "$ref": "#/components/schemas/MessageResponse",
+            "description": ""
+          }
+        }
+      },
+      "ResultSendMessageResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "状态码 (HTTP 状态码或业务状态码)"
+          },
+          "message": {
+            "type": "string",
+            "description": "响应消息"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SendMessageResponse",
+            "description": "响应数据"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "时间戳 (毫秒)\n默认值：System.currentTimeMillis()",
+            "format": "int64"
+          }
+        }
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "role": {
+            "type": "string",
+            "description": ""
+          },
+          "content": {
+            "type": "string",
+            "description": ""
+          },
+          "createdAt": {
+            "type": "string",
+            "description": ""
+          }
+        }
+      },
+      "Duration": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "integer",
+            "description": "The number of seconds in the duration.",
+            "format": "int64"
+          },
+          "nanos": {
+            "type": "integer",
+            "description": "The number of nanoseconds in the duration, expressed as a fraction of the\nnumber of seconds. This is always positive, and never exceeds 999,999,999."
+          }
+        }
+      },
+      "ConsultationMessagesResponse": {
+        "type": "object",
+        "properties": {
+          "consultationId": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "description": ""
+          },
+          "riskLevel": {
+            "type": "string",
+            "description": ""
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageResponse",
+              "description": "com.health.healthdiagnosis.dto.response.MessageResponse"
+            },
+            "description": ""
+          }
+        }
+      },
+      "ServerSentEventString": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "event": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "retry": {
+            "description": "",
+            "$ref": "#/components/schemas/Duration",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "data": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          }
+        }
+      },
+      "ResultConsultationMessagesResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "状态码 (HTTP 状态码或业务状态码)"
+          },
+          "message": {
+            "type": "string",
+            "description": "响应消息"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConsultationMessagesResponse",
+            "description": "响应数据"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "时间戳 (毫秒)\n默认值：System.currentTimeMillis()",
+            "format": "int64"
+          }
+        }
+      },
+      "ConsultationItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "chiefComplaint": {
+            "type": "string",
+            "description": ""
+          },
+          "status": {
+            "type": "string",
+            "description": ""
+          },
+          "riskLevel": {
+            "type": "string",
+            "description": ""
+          },
+          "createdAt": {
+            "type": "string",
+            "description": ""
+          },
+          "completedAt": {
+            "type": "string",
+            "description": ""
+          }
+        }
+      },
+      "ConsultationPageResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "size": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "pages": {
+            "type": "integer",
+            "description": "",
+            "format": "int64"
+          },
+          "consultations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsultationItemResponse",
+              "description": "com.health.healthdiagnosis.dto.response.ConsultationItemResponse"
+            },
+            "description": ""
+          }
+        }
+      },
+      "ResultConsultationPageResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "状态码 (HTTP 状态码或业务状态码)"
+          },
+          "message": {
+            "type": "string",
+            "description": "响应消息"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConsultationPageResponse",
+            "description": "响应数据"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "时间戳 (毫秒)\n默认值：System.currentTimeMillis()",
+            "format": "int64"
+          }
+        }
+      },
+      "ResultConsultationItemResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "状态码 (HTTP 状态码或业务状态码)"
+          },
+          "message": {
+            "type": "string",
+            "description": "响应消息"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConsultationItemResponse",
+            "description": "响应数据"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "时间戳 (毫秒)\n默认值：System.currentTimeMillis()",
+            "format": "int64"
+          }
+        }
+      },
+      "UpdateConsultationStatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": ""
+          }
+        },
+        "required": [
+          "status"
+        ]
+      }
+    },
+    "responses": {
+      "记录不存在": {
+        "description": "",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          }
+        }
+      },
+      "参数不正确": {
+        "description": "",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {}
+  },
+  "servers": [],
+  "security": []
+}

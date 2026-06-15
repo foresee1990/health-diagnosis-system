@@ -1,0 +1,42 @@
+version: "3.8"
+
+# 统一管理三个服务：数据库、后端、前端Nginx
+services:
+  # ========== 1. PostgreSQL 数据库容器 ==========
+  postgres:
+    image: pgvector/pgvector:pg14
+    container_name: pg-health-db
+    environment:
+      # 【修改点1】和后端yml的账号、密码、库名完全一致
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: health_diagnosis
+    volumes:
+      - pg-data:/var/lib/postgresql/data  # 数据持久化，删容器数据不丢
+    restart: always
+
+  # ========== 2. SpringBoot 后端容器 ==========
+  backend:
+    build: ./backend # 【修改点2】指向后端文件夹路径，目录没变就不用改
+    container_name: health-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres  # 先启动数据库，再启动后端
+    restart: always
+
+  # ========== 3. Vue前端 + Nginx 容器 ==========
+  frontend:
+    image: nginx:alpine
+    container_name: health-frontend
+    ports:
+      - "80:80"  # 前端访问端口，浏览器直接用80端口
+    volumes:
+      # 【修改点3】指向前端打包后的文件夹路径
+      - ./frontend:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+
+# 数据卷（数据库持久化，不用修改）
+volumes:
+  pg-data:

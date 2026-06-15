@@ -1,0 +1,9 @@
+# 开发环境配置（启动时添加 --spring.profiles.active=dev）
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl   # 开发时打印完整 SQL
+
+logging:
+  level:
+    com.health.healthdiagnosis: DEBUG
+    org.springframework.ai: DEBUG

@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --color-primary: #2F80ED;
+  --color-bg: #F5FAFF;
+  --color-card: #FFFFFF;
+  --color-surface: #F3F4F6;
+  --color-border: #E5E7EB;
+  --color-text: #374151;
+  --color-text-secondary: #6B7280;
+  --color-user-bubble: #E8F3FF;
+
+  --radius-btn: 10px;
+  --radius-card: 12px;
+  --radius-bubble: 14px;
+
+  --navbar-height: 64px;
+  --sidebar-width: 260px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Element Plus overrides */
+.el-button--primary {
+  --el-button-bg-color: var(--color-primary);
+  --el-button-border-color: var(--color-primary);
+  border-radius: var(--radius-btn);
+}
+
+.el-input__wrapper {
+  border-radius: var(--radius-btn);
+}
+
+.el-card {
+  border-radius: var(--radius-card);
+}

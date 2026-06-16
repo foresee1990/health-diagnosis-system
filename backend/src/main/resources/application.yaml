@@ -17,7 +17,7 @@ spring:
   ai:
     openai:
       base-url: https://dashscope.aliyuncs.com/compatible-mode
-      api-key: ${DASHSCOPE_API_KEY}
+      api-key: ${DASHSCOPE_API_KEY:disabled}
       chat:
         options:
           model: qwen3-8b      # 支持 <think> 思维链输出

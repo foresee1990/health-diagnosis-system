@@ -51,6 +51,7 @@ public class KnowledgeManagementServiceImpl implements KnowledgeManagementServic
     private final KnowledgeDocumentMapper documentMapper;
     private final KnowledgeConfigMapper configMapper;
     private final UserMapper userMapper;
+    @Lazy
     private final VectorStore vectorStore;
     private final JdbcTemplate jdbcTemplate;
 

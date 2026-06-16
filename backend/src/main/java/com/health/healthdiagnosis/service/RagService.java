@@ -20,8 +20,9 @@ import reactor.core.publisher.Flux;
 @Service
 @RequiredArgsConstructor
 public class RagService {
-
+    @Lazy
     private final ChatClient chatClient;
+    @Lazy
     private final VectorStore vectorStore;
     private final ChatMemory chatMemory;
 

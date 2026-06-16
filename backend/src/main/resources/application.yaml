@@ -6,7 +6,7 @@ spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/health_diagnosis
     username: postgres
-    password: 123456
+    password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -54,7 +54,7 @@ server:
 # JWT 配置（secret 至少 32 字符）
 jwt:
   #TODO： 之后放在配置变量里面
-  secret: health-diagnosis-jwt-secret-key-2024-change-in-prod
+  secret: ${JWT_SECRET}
   expiration: 86400000   # 24 小时（毫秒）
 
 # 应用自定义配置
